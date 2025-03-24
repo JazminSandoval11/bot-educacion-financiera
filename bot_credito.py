@@ -222,7 +222,7 @@ def procesar_mensaje(mensaje, numero):
             "   - Enfócate primero en las que tienen la tasa más alta.\n"
             "________________________________________\n"
             "¿Te gustaría simular cuánto podrías ahorrar con pagos extra?\n"
-            "Dime *simular un crédito* o *menú* para regresar."
+            "Escribe *menú* para regresar."
         )
 
     # Opción 6: Cómo identificar un crédito caro
@@ -244,7 +244,7 @@ def procesar_mensaje(mensaje, numero):
             "________________________________________\n"
             "¡Ojo! Si no entiendes bien el total a pagar, es una alerta.\n"
             "¿Te gustaría que comparemos dos créditos específicos?\n"
-            "Si sí, dime los datos o escribe *menú* para volver."
+            "Escribe *menú* para volver."
         )
 
     # Opción 7: Errores comunes al solicitar un crédito
@@ -268,7 +268,7 @@ def procesar_mensaje(mensaje, numero):
             "   - Haz un presupuesto antes de tomarlo.\n"
             "________________________________________\n"
             "¿Te gustaría planear mejor tu crédito?\n"
-            "Escribe *simular un crédito* o *menú*."
+            "Escribe *menú*."
         )
 
     # Opción 8: Entender el Buró de Crédito
