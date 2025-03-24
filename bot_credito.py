@@ -443,43 +443,68 @@ def procesar_mensaje(mensaje, numero):
                 return "Ocurrió un error al calcular el ahorro. Revisa tus datos."
 
         # Opción 3 (compras a pagos fijos)
-        if contexto["esperando"] == "precio_contado":
-            try:
-                contexto["precio_contado"] = Decimal(mensaje.replace(",", ""))
-                contexto["esperando"] = "pago_fijo_tienda"
-                return "2️⃣ ¿De cuánto será cada pago (por ejemplo: 250)?"
-            except:
-                return "Por favor, indica el precio de contado con números (ejemplo: 1800)"
+if contexto["esperando"] == "precio_contado":
+    try:
+        contexto["precio_contado"] = Decimal(mensaje.replace(",", ""))
+        contexto["esperando"] = "pago_fijo_tienda"
+        return "2️⃣ ¿De cuánto será cada pago (por ejemplo: 250)?"
+    except:
+        return "Por favor, indica el precio de contado con números (ejemplo: 1800)"
 
-        if contexto["esperando"] == "pago_fijo_tienda":
-            try:
-                contexto["pago_fijo_tienda"] = Decimal(mensaje.replace(",", ""))
-                contexto["esperando"] = "numero_pagos_tienda"
-                return "3️⃣ ¿Cuántos pagos harás en total?"
-            except:
-                return "Cantidad inválida. Intenta con un número."
+if contexto["esperando"] == "pago_fijo_tienda":
+    try:
+        contexto["pago_fijo_tienda"] = Decimal(mensaje.replace(",", ""))
+        contexto["esperando"] = "numero_pagos_tienda"
+        return "3️⃣ ¿Cuántos pagos harás en total?"
+    except:
+        return "Cantidad inválida. Intenta con un número."
 
-        if contexto["esperando"] == "numero_pagos_tienda":
-            try:
-                num_pagos = int(mensaje.strip())
-                total, intereses, tasa_periodo, tasa_anual = calcular_costo_credito_tienda(
-                    contexto["precio_contado"],
-                    contexto["pago_fijo_tienda"],
-                    num_pagos
-                )
-                estado_usuario.pop(numero)
-                return (
-                    f"📊 Aquí tienes los resultados:\n"
-                    f"💰 Precio de contado: ${contexto['precio_contado']}\n"
-                    f"📆 Pagos fijos de ${contexto['pago_fijo_tienda']} durante {num_pagos} periodos.\n\n"
-                    f"💸 Total pagado: ${total}\n"
-                    f"🧮 Intereses pagados: ${intereses}\n"
-                    f"📈 Tasa por periodo: {tasa_periodo}%\n"
-                    f"📅 Tasa anual equivalente: {tasa_anual}%\n\n"
-                    "Escribe *menú* para volver al inicio."
-                )
-            except:
-                return "Ocurrió un error al calcular el crédito. Revisa tus datos."
+# PRIMER PASO: guardamos num_pagos y pedimos periodos anuales
+if contexto["esperando"] == "numero_pagos_tienda":
+    try:
+        # Convertimos la entrada a entero
+        numero_pagos = int(mensaje.strip())
+        contexto["numero_pagos_tienda"] = numero_pagos
+
+        # Cambiamos a un nuevo estado donde preguntamos cuántos periodos hay en 1 año
+        contexto["esperando"] = "pedir_periodos_anuales_tienda"
+        return (
+            "Para calcular la tasa anual real, necesito saber cuántos periodos hay en 1 año.\n"
+            "Por ejemplo:\n"
+            "• 12 si es mensual\n"
+            "• 24 si es quincenal\n"
+            "• 52 si es semanal\n\n"
+            "Escribe solo el número:"
+        )
+    except:
+        return "Ocurrió un error. Indica cuántos pagos totales harás (ejemplo: 24)."
+
+# SEGUNDO PASO: usuario indica periodos anuales
+if contexto["esperando"] == "pedir_periodos_anuales_tienda":
+    try:
+        periodos_anuales = int(mensaje.strip())
+        # Llamamos a la función con 4 parámetros
+        total, intereses, tasa_periodo, tasa_anual = calcular_costo_credito_tienda(
+            contexto["precio_contado"],
+            contexto["pago_fijo_tienda"],
+            contexto["numero_pagos_tienda"],
+            periodos_anuales
+        )
+        # Al final, limpiamos el estado estado_usuario.pop(numero)
+        return (
+            f"📊 Aquí tienes los resultados:\n"
+            f"💰 Precio de contado: ${contexto['precio_contado']}\n"
+            f"📆 Pagos fijos de ${contexto['pago_fijo_tienda']} "
+            f"durante {contexto['numero_pagos_tienda']} periodos.\n\n"
+            f"💸 Total pagado: ${total}\n"
+            f"🧮 Intereses pagados: ${intereses}\n"
+            f"📈 Tasa por periodo: {tasa_periodo}%\n"
+            f"📅 Tasa anual equivalente (basado en {periodos_anuales} "
+            f"periodos al año): {tasa_anual}%\n\n"
+            "Escribe *menú* para volver al inicio."
+        )
+    except:
+        return "Ocurrió un error. Asegúrate de indicar cuántos periodos hay en un año con un número (ej: 24)."
 
         # Opción 4 (capacidad de pago)
         if contexto["esperando"] == "ingreso":
