@@ -450,126 +450,77 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Ocurrió un error al calcular el crédito. Revisa tus datos."
 
-        # Opción 4: ¿Cuánto me pueden prestar?
-if contexto["esperando"] == "ingreso":
-    try:
-        contexto["ingreso"] = Decimal(mensaje.replace(",", ""))
-        contexto["esperando"] = "pagos_fijos"
-        return (
-            "2️⃣ ¿Cuánto pagas mensualmente en créditos formales o instituciones financieras?\n"
-            "(Es decir, en pagos de préstamos personales, hipotecas, crédito de auto, crédito de nómina, etc.)"
-        )
-    except:
-        return "Por favor, escribe un número válido (ej: 12500)"
+        # Opción 4: Ingreso, pagos_fijos, ...
+        if contexto["esperando"] == "ingreso":
+            try:
+                contexto["ingreso"] = Decimal(mensaje.replace(",", ""))
+                contexto["esperando"] = "pagos_fijos"
+                return (
+                    "2️⃣ ¿Cuánto pagas mensualmente en créditos formales o instituciones financieras?\n"
+                    "(Es decir, en pagos de préstamos personales, hipotecas, crédito de auto, crédito de nómina, entre otros, que tienes con bancos u otras entidades financieras)"
+                )
+            except:
+                return "Por favor, escribe un número válido (ej: 12500)"
 
-if contexto["esperando"] == "pagos_fijos":
-    try:
-        contexto["pagos_fijos"] = Decimal(mensaje.replace(",", ""))
-        contexto["esperando"] = "deuda_revolvente"
-        return "3️⃣ ¿Cuánto debes actualmente en tarjetas de crédito u otras deudas revolventes?"
-    except:
-        return "Por favor, indica la cantidad mensual que pagas en créditos (ej: 1800)"
+        if contexto["esperando"] == "pagos_fijos":
+            try:
+                contexto["pagos_fijos"] = Decimal(mensaje.replace(",", ""))
+                contexto["esperando"] = "deuda_revolvente"
+                return "3️⃣ ¿Cuánto debes actualmente en tarjetas de crédito u otras deudas revolventes?"
+            except:
+                return "Por favor, indica la cantidad mensual que pagas en créditos (ej: 1800)"
 
-if contexto["esperando"] == "deuda_revolvente":
-    try:
-        contexto["deuda_revolvente"] = Decimal(mensaje.replace(",", ""))
-        contexto["esperando"] = "riesgo"
-        return (
-            "4️⃣ Según tu experiencia, ¿cómo calificarías tu nivel de riesgo como cliente?\n"
-            "1. Bajo (siempre pago a tiempo)\n"
-            "2. Medio (a veces me atraso)\n"
-            "3. Alto (me atraso seguido o ya tengo deudas grandes)"
-        )
-    except:
-        return "Por favor, indica un número para la deuda revolvente."
+        if contexto["esperando"] == "deuda_revolvente":
+            try:
+                contexto["deuda_revolvente"] = Decimal(mensaje.replace(",", ""))
+                contexto["esperando"] = "riesgo"
+                return (
+                    "4️⃣ Según tu experiencia, ¿cómo calificarías tu nivel de riesgo como cliente?\n"
+                    "1. Bajo (siempre pago a tiempo)\n"
+                    "2. Medio (a veces me atraso)\n"
+                    "3. Alto (me atraso seguido o ya tengo deudas grandes)"
+                )
+            except:
+                return "Por favor, indica un número para la deuda revolvente."
 
-if contexto["esperando"] == "riesgo":
-    riesgo = texto_limpio
-    if riesgo not in ["1", "2", "3"]:
-        return "Elige 1, 2 o 3 según tu nivel de riesgo."
+        if contexto["esperando"] == "riesgo":
+            riesgo = texto_limpio
+            if riesgo not in ["1", "2", "3"]:
+                return "Elige 1, 2 o 3 según tu nivel de riesgo."
 
-    contexto["riesgo"] = riesgo
-    porcentajes = {"1": Decimal("0.60"), "2": Decimal("0.45"), "3": Decimal("0.30")}
-    porcentaje_riesgo = porcentajes[riesgo]
-    ingreso = contexto["ingreso"]
-    pagos_fijos = contexto["pagos_fijos"]
-    deuda_revolvente = contexto["deuda_revolvente"]
-    pago_est_deuda_revolvente = deuda_revolvente * Decimal("0.06")
+            contexto["riesgo"] = riesgo
+            porcentaje_riesgo = {"1": Decimal("0.60"), "2": Decimal("0.45"), "3": Decimal("0.30")}[riesgo]
+            ingreso = contexto["ingreso"]
+            pagos_fijos = contexto["pagos_fijos"]
+            deuda_revolvente = contexto["deuda_revolvente"]
+            pago_est_deuda_revolvente = deuda_revolvente * Decimal("0.06")
 
-    capacidad_total = ingreso * porcentaje_riesgo
-    capacidad_mensual = capacidad_total - pagos_fijos - pago_est_deuda_revolvente
-    capacidad_mensual = capacidad_mensual.quantize(Decimal("0.01"))
+            capacidad_total = ingreso * porcentaje_riesgo
+            capacidad_mensual = capacidad_total - pagos_fijos - pago_est_deuda_revolvente
+            capacidad_mensual = capacidad_mensual.quantize(Decimal("0.01"))
 
-    contexto["capacidad_mensual"] = capacidad_mensual
-    contexto["porcentaje_riesgo"] = porcentaje_riesgo
-    contexto["esperando"] = "subopcion_prestamo"
+            contexto["capacidad_mensual"] = capacidad_mensual
+            contexto["porcentaje_riesgo"] = porcentaje_riesgo
+            contexto["esperando"] = "subopcion_prestamo"
 
-    return (
-        f"✅ Según tus datos, podrías pagar hasta ${capacidad_mensual} al mes en un nuevo crédito.\n\n"
-        "¿Qué te gustaría hacer ahora?\n"
-        "1. Calcular el monto máximo de crédito que podrías solicitar\n"
-        "2. Validar si un crédito que te interesa podría ser aprobado\n"
-        "Escribe 1 o 2 para continuar."
-    )
+            return (
+                f"✅ Según tus datos, podrías pagar hasta ${capacidad_mensual} al mes en un nuevo crédito.\n\n"
+                "¿Qué te gustaría hacer ahora?\n"
+                "1. Calcular el monto máximo de crédito que podrías solicitar\n"
+                "2. Validar si un crédito que te interesa podría ser aprobado\n"
+                "Escribe 1 o 2 para continuar."
+            )
 
-if contexto["esperando"] == "subopcion_prestamo":
-    opcion = texto_limpio
-    if opcion == "1":
-        contexto["esperando"] = "plazo_simular"
-        return "📆 ¿A cuántos pagos (meses, quincenas, etc.) deseas simular el crédito?"
-    elif opcion == "2":
-        contexto["esperando"] = "monto_credito_deseado"
-        return "💰 ¿De cuánto sería el crédito que te interesa solicitar?"
-    else:
-        return "Por favor, escribe 1 o 2."
-
-if contexto["esperando"] == "plazo_simular":
-    try:
-        contexto["plazo_simular"] = Decimal(mensaje.replace(",", ""))
-        contexto["esperando"] = "tasa_simular"
-        return "📈 ¿Cuál es la tasa de interés por periodo? (ej: 0.025 para 2.5%)"
-    except:
-        return "Número inválido."
-
-if contexto["esperando"] == "tasa_simular":
-    try:
-        tasa = Decimal(mensaje.replace(",", ""))
-        plazo = contexto["plazo_simular"]
-        capacidad = contexto["capacidad_mensual"]
-
-        # Cálculo del monto máximo según la capacidad
-        base = Decimal("1") + tasa
-        potencia = base ** plazo
-        inverso = Decimal("1") / potencia
-        factor = (Decimal("1") - inverso) / tasa
-        monto_maximo = (capacidad * factor).quantize(Decimal("0.01"))
-
-        # YA NO 'pop' aquí, sino nuevo submenú para seguir
-        contexto["monto_maximo"] = monto_maximo
-        contexto["esperando"] = "submenu_despues_de_maximo"
-
-        return (
-            f"✅ Con base en tu capacidad de pago de ${capacidad}, podrías aspirar a un crédito de hasta ${monto_maximo}.\n\n"
-            "¿Te gustaría ahora validar un crédito específico o volver al menú?\n"
-            "1. Validar un crédito\n"
-            "2. Regresar al menú\n"
-            "Escribe 1 o 2."
-        )
-    except:
-        return "Verifica tu tasa (ejemplo: 0.025)."
-
-# Nuevo submenú post-cálculo
-if contexto["esperando"] == "submenu_despues_de_maximo":
-    if texto_limpio == "1":
-        # Va a la opción 2 (monto_credito_deseado)
-        contexto["esperando"] = "monto_credito_deseado"
-        return "💰 ¿De cuánto sería el crédito que te interesa solicitar?"
-    elif texto_limpio == "2":
-        # Regresar a menú
-        estado_usuario.pop(numero)
-        return "Listo, escribe *menú* para ver otras opciones."
-    else:
-        return "Por favor, escribe 1 o 2."
+        if contexto["esperando"] == "subopcion_prestamo":
+            opcion = texto_limpio
+            if opcion == "1":
+                contexto["esperando"] = "plazo_simular"
+                return "📆 ¿A cuántos pagos (meses, quincenas, etc.) deseas simular el crédito?"
+            elif opcion == "2":
+                contexto["esperando"] = "monto_credito_deseado"
+                return "💰 ¿De cuánto sería el crédito que te interesa solicitar?"
+            else:
+                return "Por favor, escribe 1 o 2."
 
         if contexto["esperando"] == "plazo_simular":
             try:
