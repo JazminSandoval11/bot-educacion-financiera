@@ -258,26 +258,63 @@ if texto_limpio in ["6", "cómo identificar un crédito caro"]:
         "Escribe *menú* para volver."
     )
 
-        # Opción 7: Errores comunes
-        if texto_limpio in ["7", "errores comunes al solicitar un crédito"]:
-            return (
-                "🟡 *Errores comunes*\n"
-                "1) No saber el total a pagar\n"
-                "2) Pedir más de lo necesario\n"
-                "3) Aceptar el primer crédito\n"
-                "4) No leer contrato\n"
-                "5) Usar crédito sin plan\n"
-                "Escribe *menú* para volver."
-            )
+        # Opción 7: Errores comunes al solicitar un crédito
+if texto_limpio in ["7", "errores comunes al solicitar un crédito"]:
+    return (
+        "Solicitar un crédito es una gran responsabilidad. Aquí te comparto algunos errores comunes que muchas personas cometen… ¡y cómo evitarlos!\n"
+        "________________________________________\n"
+        "❌ 1. No saber cuánto terminarás pagando en total\n"
+        "Muchas personas solo se fijan en el pago mensual y no en el costo total del crédito.\n"
+        "✅ Usa simuladores (como el que tengo 😎) para saber cuánto pagarás realmente.\n"
+        "________________________________________\n"
+        "❌ 2. Pedir más dinero del que realmente necesitas\n"
+        "📌 Entre más pidas, más intereses pagas.\n"
+        "✅ Pide solo lo necesario y asegúrate de poder pagarlo.\n"
+        "________________________________________\n"
+        "❌ 3. Aceptar el primer crédito que te ofrecen\n"
+        "📌 Hay diferencias enormes entre una institución y otra.\n"
+        "✅ Compara tasas, comisiones y condiciones antes de decidir.\n"
+        "________________________________________\n"
+        "❌ 4. No leer el contrato completo\n"
+        "Sí, puede ser largo, pero ahí están los detalles importantes:\n"
+        "📌 ¿Hay comisiones por pagar antes de tiempo?\n"
+        "📌 ¿Qué pasa si te atrasas?\n"
+        "✅ Lee con calma o pide que te lo expliquen.\n"
+        "________________________________________\n"
+        "❌ 5. Usar un crédito sin un plan de pago\n"
+        "📌 Si no sabes cómo lo vas a pagar, puedes meterte en problemas.\n"
+        "✅ Haz un presupuesto antes de aceptar cualquier crédito.\n\n"
+        "Escribe *menú* para volver."
+    )
 
-        # Opción 8: Buró de Crédito
+
         if texto_limpio in ["8", "entender el buró de crédito"]:
-            estado_usuario[numero] = {"esperando": "submenu_buro"}
-            return (
-                "🟡 *Entender el Buró de Crédito*\n"
-                "No es una lista negra, sino un registro.\n"
-                "¿Te gustaría saber cómo mejorar tu historial?\n"
-                "Responde *sí* o *no*."
+    estado_usuario[numero] = {"esperando": "submenu_buro"}
+    return (
+        "El Buró de Crédito no es un enemigo, es solo un registro de cómo has manejado tus créditos. Y sí, puede ayudarte o perjudicarte según tu comportamiento.\n"
+        "________________________________________\n"
+        "📊 ¿Qué es el Buró de Crédito?\n"
+        "Es una empresa que guarda tu historial de pagos.\n"
+        "📌 Si pagas bien, tu historial será positivo.\n"
+        "📌 Si te atrasas, se reflejará ahí.\n"
+        "________________________________________\n"
+        "💡 Tener historial no es malo.\n"
+        "De hecho, si nunca has pedido un crédito, no aparecerás en Buró y eso puede dificultar que te aprueben uno.\n"
+        "________________________________________\n"
+        "📈 Tu comportamiento crea un “score” o puntaje.\n"
+        "• Pagar a tiempo te ayuda\n"
+        "• Deber mucho o atrasarte te baja el score\n"
+        "• Tener muchas tarjetas al tope también afecta\n"
+        "________________________________________\n"
+        "❗ Cuidado con estas ideas falsas:\n"
+        "• “Estoy en Buró” no siempre es malo\n"
+        "• No es una lista negra\n"
+        "• No te borran tan fácil (los registros duran años)\n"
+        "________________________________________\n"
+        "¿Te gustaría saber cómo mejorar tu historial crediticio o qué pasos tomar para subir tu puntaje?\n"
+        "Responde *sí* o *no*."
+    )
+
             )
 
     # ============= LÓGICA DE ESTADOS =============
