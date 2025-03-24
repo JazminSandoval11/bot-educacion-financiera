@@ -209,29 +209,54 @@ def procesar_mensaje(mensaje, numero):
                 "1️⃣ ¿Cuál es tu ingreso neto mensual? (Después de impuestos y deducciones)"
             )
 
-        # Opción 5: Consejos
-        if texto_limpio in ["5", "consejos para pagar un crédito sin ahogarte"]:
-            return (
-                "🟡 *Consejos para pagar un crédito sin ahogarte*\n"
-                "1) Haz pagos anticipados\n"
-                "2) Programa pagos en automático\n"
-                "3) Revisa si puedes cambiar tu crédito\n"
-                "4) Haz un presupuesto\n"
-                "5) Prioriza deudas más caras\n"
-                "Escribe *menú* para volver."
-            )
+        # Opción 5: Consejos para pagar un crédito sin ahogarte
+if texto_limpio in ["5", "consejos para pagar un crédito sin ahogarte"]:
+    return (
+        "🟡 Opción 5: Consejos para pagar un crédito sin ahogarte\n"
+        "Pagar un crédito no tiene que sentirse como una carga eterna. Aquí van algunos consejos sencillos para ayudarte a pagar con más tranquilidad y menos estrés:\n"
+        "________________________________________\n"
+        "✅ 1. Haz pagos anticipados cuando puedas\n"
+        "📌 Aunque no sea obligatorio, abonar un poco más al capital te ahorra intereses y reduce el plazo.\n"
+        "💡 Incluso $200 o $500 adicionales hacen una gran diferencia con el tiempo.\n"
+        "________________________________________\n"
+        "✅ 2. Programa tus pagos en automático\n"
+        "📌 Evitas atrasos, recargos y estrés.\n"
+        "💡 Si no tienes domiciliación, pon recordatorios para no fallar.\n"
+        "________________________________________\n"
+        "✅ 3. Revisa si puedes cambiar tu crédito por uno mejor\n"
+        "📌 A esto se le llama “reestructura” o “portabilidad”.\n"
+        "💡 Si tu historial ha mejorado, podrías conseguir mejores condiciones.\n"
+        "________________________________________\n"
+        "✅ 4. Haz un presupuesto mensual\n"
+        "📌 Saber cuánto entra y cuánto sale te ayuda a organizar tus pagos sin descuidar otras necesidades.\n"
+        "💡 Apóyate en apps, papel o Excel, lo que te funcione.\n"
+        "________________________________________\n"
+        "✅ 5. Prioriza las deudas más caras\n"
+        "📌 Si tienes varias, enfócate primero en las que tienen interés más alto, como tarjetas de crédito.\n"
+        "________________________________________\n"
+        "Escribe *menú* para volver."
+    )
 
-        # Opción 6: Crédito caro
-        if texto_limpio in ["6", "cómo identificar un crédito caro"]:
-            return (
-                "🟡 *Cómo identificar un crédito caro*\n"
-                "1) CAT elevado\n"
-                "2) Comisiones escondidas\n"
-                "3) Tasa variable\n"
-                "4) Plazo largo con pagos bajos\n"
-                "Si no entiendes el total a pagar, alerta.\n"
-                "Escribe *menú* para volver."
-            )
+
+        # Opción 6: Cómo identificar un crédito caro
+if texto_limpio in ["6", "cómo identificar un crédito caro"]:
+    return (
+        "Muchas veces un crédito parece accesible… hasta que ves lo que terminas pagando. Aquí te doy algunas claves para detectar si un crédito es caro:\n\n"
+        "🔍 1. CAT (Costo Anual Total)\n"
+        "Es una medida que incluye la tasa de interés, comisiones y otros cargos.\n"
+        "📌 Entre más alto el CAT, más caro te saldrá el crédito.\n"
+        "💡 Compara el CAT entre diferentes instituciones, no solo la tasa.\n\n"
+        "🔍 2. Comisiones escondidas\n"
+        "Algunos créditos cobran por apertura, por manejo, por pagos tardíos o por pagos anticipados 😵\n"
+        "📌 Lee siempre el contrato antes de firmar.\n\n"
+        "🔍 3. Tasa de interés variable\n"
+        "📌 Algunos créditos no tienen tasa fija, sino que pueden subir.\n"
+        "💡 Revisa si tu tasa es fija o variable. Las variables pueden volverse muy caras si sube la inflación.\n\n"
+        "🔍 4. Pago mensual bajo con plazo largo\n"
+        "Parece atractivo, pero terminas pagando muchísimo más en intereses.\n\n"
+        "❗ Si el crédito parece demasiado fácil o rápido, pero no entiendes bien cuánto vas a pagar en total... ¡es una señal de alerta!\n\n"
+        "Escribe *menú* para volver."
+    )
 
         # Opción 7: Errores comunes
         if texto_limpio in ["7", "errores comunes al solicitar un crédito"]:
