@@ -613,7 +613,7 @@ def webhook():
     if request.method == "GET":
         verify_token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
-        if verify_token == "mi_token_secreto":
+        if verify_token == "arrocito2024":
             return challenge
         return "Token inválido", 403
 
