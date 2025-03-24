@@ -104,12 +104,12 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
         except:
             break
 
-    tasa_periodo = r_estimada
+    tasa_periodo = max(r_estimada, Decimal("0.0000001"))  # Evita tasas negativas o cero
     total_pagado = cuota * n
     intereses = total_pagado - precio
 
-    if tasa_periodo <= 0 or periodos_anuales <= 0:
-        raise ValueError("Tasa o número de periodos no válidos")
+    if periodos_anuales <= 0:
+        raise ValueError("Número de periodos anuales no válido")
 
     tasa_anual = ((Decimal('1') + tasa_periodo) ** Decimal(periodos_anuales)) - Decimal('1')
 
