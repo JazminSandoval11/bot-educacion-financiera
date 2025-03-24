@@ -138,7 +138,7 @@ saludo_inicial = (
     "¿Sobre qué aspecto del crédito necesitas ayuda hoy?\n"
     "Escríbeme el número o el nombre de alguna de estas opciones para empezar:\n\n"
     "1️⃣ Simular un crédito\n"
-    "2️⃣ Ver cuánto me ahorro si doy pagos extra al crédito (sin simular primero)\n"
+    "2️⃣ Ver cuánto me ahorro si doy pagos extra al crédito\n"
     "3️⃣ Calcular el costo real de compras a pagos fijos en tiendas\n"
     "4️⃣ ¿Cuánto me pueden prestar?\n"
     "5️⃣ Consejos para pagar un crédito sin ahogarte\n"
