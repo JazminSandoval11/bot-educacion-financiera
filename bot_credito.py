@@ -84,8 +84,9 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
 
 # =========================================
 # Costo real de compras a pagos fijos
+# (Recibe "periodos_anuales" para la tasa anual)
 # =========================================
-def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos):
+def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, periodos_anuales):
     precio = Decimal(str(precio_contado))
     cuota = Decimal(str(pago_periodico))
     n = int(num_pagos)
@@ -95,7 +96,7 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos):
     for _ in range(100):
         try:
             base = (Decimal('1') + r_estimada) ** (-n)
-            pago_calculado = saldo * r_estimada / (1 - base)
+            pago_calculado = precio * r_estimada / (1 - base)
             diferencia = pago_calculado - cuota
             if abs(diferencia) < Decimal('0.0001'):
                 break
@@ -106,7 +107,9 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos):
     tasa_periodo = r_estimada
     total_pagado = cuota * n
     intereses = total_pagado - precio
-    tasa_anual = ((Decimal('1') + tasa_periodo) ** Decimal('12')) - Decimal('1')
+
+    # En lugar de 12, usamos los periodos_anuales
+    tasa_anual = ((Decimal('1') + tasa_periodo) ** Decimal(periodos_anuales)) - Decimal('1')
 
     return (
         total_pagado.quantize(Decimal("0.01")),
@@ -134,15 +137,15 @@ saludo_inicial = (
 )
 
 app = Flask(__name__)
-estado_usuario = {}
 
 def enviar_mensaje(numero, texto):
     print(f"[Enviar a {numero}]: {texto}")
 
+estado_usuario = {}
+
 def procesar_mensaje(mensaje, numero):
     texto_limpio = mensaje.strip().lower()
 
-    # Evitar menú si estamos en pasos críticos
     subflujo_critico = False
     if numero in estado_usuario:
         esperando = estado_usuario[numero].get("esperando")
@@ -151,12 +154,12 @@ def procesar_mensaje(mensaje, numero):
             "abono_extra1", "abono_extra2",
             "riesgo", "subopcion_prestamo",
             "submenu_despues_de_maximo",
+            # También periodo_anual
+            "pedir_periodos_anuales_tienda"
         ]:
             subflujo_critico = True
 
-    # ======================
-    # MENÚ PRINCIPAL 1..8
-    # ======================
+    # MENÚ PRINCIPAL
     if not subflujo_critico:
         if texto_limpio in ["hola", "menu", "menú"]:
             estado_usuario[numero] = {}
@@ -291,9 +294,7 @@ def procesar_mensaje(mensaje, numero):
                 "Responde *sí* o *no*."
             )
 
-    # ===========================
-    # LÓGICA DE ESTADOS (subflujos)
-    # ===========================
+    # LÓGICA DE ESTADOS
     if numero in estado_usuario and "esperando" in estado_usuario[numero]:
         contexto = estado_usuario[numero]
 
@@ -326,7 +327,6 @@ def procesar_mensaje(mensaje, numero):
                 contexto["tasa"] = tasa
                 contexto["pago_fijo"] = pago
                 contexto["esperando"] = "abono_extra2"
-
                 return (
                     f"✅ Tu pago por periodo sería de: ${pago}\n"
                     f"💰 Pagarías en total: ${total_pagado.quantize(Decimal('0.01'))}\n"
@@ -442,10 +442,11 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Ocurrió un error al calcular el ahorro. Revisa tus datos."
 
-        # Opción 3 (compras a pagos fijos)
+        # Opción 3 (compras a pagos fijos) - Ajustado para periodos anuales
         if contexto["esperando"] == "precio_contado":
             try:
                 contexto["precio_contado"] = Decimal(mensaje.replace(",", ""))
+                # Aquí pedimos el pago fijo
                 contexto["esperando"] = "pago_fijo_tienda"
                 return "2️⃣ ¿De cuánto será cada pago (por ejemplo: 250)?"
             except:
@@ -454,6 +455,7 @@ def procesar_mensaje(mensaje, numero):
         if contexto["esperando"] == "pago_fijo_tienda":
             try:
                 contexto["pago_fijo_tienda"] = Decimal(mensaje.replace(",", ""))
+                # Ahora pedimos cuántos pagos totales
                 contexto["esperando"] = "numero_pagos_tienda"
                 return "3️⃣ ¿Cuántos pagos harás en total?"
             except:
@@ -461,25 +463,44 @@ def procesar_mensaje(mensaje, numero):
 
         if contexto["esperando"] == "numero_pagos_tienda":
             try:
-                num_pagos = int(mensaje.strip())
+                contexto["numero_pagos_tienda"] = int(mensaje.strip())
+                # Nuevo estado: periodos_anuales_tienda
+                contexto["esperando"] = "pedir_periodos_anuales_tienda"
+                return (
+                    "Para calcular la tasa anual real, necesito saber "
+                    "cuántos periodos hay en 1 año. Ejemplo:\n"
+                    "• 12 si los pagos son mensuales\n"
+                    "• 24 si los pagos son quincenales\n"
+                    "• 52 si son semanales\n\n"
+                    "Dime cuántos periodos hay en 1 año:"
+                )
+            except:
+                return "Ocurrió un error. Indica cuántos pagos totales harás (ejemplo: 24)."
+
+        # Aquí preguntamos periodos anuales
+        if contexto["esperando"] == "pedir_periodos_anuales_tienda":
+            try:
+                periodos_anuales = int(mensaje.strip())
+                # Llamamos a la función con periodos_anuales
                 total, intereses, tasa_periodo, tasa_anual = calcular_costo_credito_tienda(
                     contexto["precio_contado"],
                     contexto["pago_fijo_tienda"],
-                    num_pagos
+                    contexto["numero_pagos_tienda"],
+                    periodos_anuales
                 )
                 estado_usuario.pop(numero)
                 return (
                     f"📊 Aquí tienes los resultados:\n"
                     f"💰 Precio de contado: ${contexto['precio_contado']}\n"
-                    f"📆 Pagos fijos de ${contexto['pago_fijo_tienda']} durante {num_pagos} periodos.\n\n"
+                    f"📆 Pagos fijos de ${contexto['pago_fijo_tienda']} durante {contexto['numero_pagos_tienda']} periodos.\n\n"
                     f"💸 Total pagado: ${total}\n"
                     f"🧮 Intereses pagados: ${intereses}\n"
                     f"📈 Tasa por periodo: {tasa_periodo}%\n"
-                    f"📅 Tasa anual equivalente: {tasa_anual}%\n\n"
+                    f"📅 Tasa anual equivalente (basado en {periodos_anuales} periodos al año): {tasa_anual}%\n\n"
                     "Escribe *menú* para volver al inicio."
                 )
             except:
-                return "Ocurrió un error al calcular el crédito. Revisa tus datos."
+                return "Ocurrió un error. Asegúrate de indicar cuántos periodos hay en un año con un número (ej: 24)."
 
         # Opción 4 (capacidad de pago)
         if contexto["esperando"] == "ingreso":
@@ -517,7 +538,6 @@ def procesar_mensaje(mensaje, numero):
         if contexto["esperando"] == "riesgo":
             if texto_limpio not in ["1", "2", "3"]:
                 return "Elige 1, 2 o 3 según tu nivel de riesgo."
-
             contexto["riesgo"] = texto_limpio
             porcentajes = {"1": Decimal("0.60"), "2": Decimal("0.45"), "3": Decimal("0.30")}
             porcentaje_riesgo = porcentajes[texto_limpio]
@@ -560,7 +580,6 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Número inválido."
 
-        # submenú para el monto máximo
         if contexto["esperando"] == "tasa_simular":
             try:
                 tasa = Decimal(mensaje.replace(",", ""))
@@ -575,7 +594,6 @@ def procesar_mensaje(mensaje, numero):
 
                 contexto["monto_maximo"] = monto_maximo
                 contexto["esperando"] = "submenu_despues_de_maximo"
-
                 return (
                     f"✅ Con base en tu capacidad de pago de ${capacidad}, podrías aspirar a un crédito de hasta ${monto_maximo}.\n\n"
                     "¿Te gustaría ahora validar un crédito específico o volver al menú?\n"
@@ -678,8 +696,8 @@ def procesar_mensaje(mensaje, numero):
                 estado_usuario.pop(numero)
                 return "Entiendo. Escribe *menú*."
 
-    # Si nada coincide:
     return "No entendí. Escribe *menú* para ver las opciones."
+
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
