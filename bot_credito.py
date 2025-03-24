@@ -80,23 +80,6 @@ def webhook():
 def enviar_mensaje(numero, texto):
     print(f"Enviando a {numero}: {texto}")
 # =========================================
-# Cálculo de pagos con fórmula tipo Excel
-# =========================================
-
-def calcular_pago_fijo_excel(monto, tasa, plazo):
-    getcontext().prec = 17
-    P = Decimal(str(monto))
-    r = Decimal(str(tasa))
-    n = Decimal(str(plazo))
-    uno_mas_r = Decimal('1') + r
-    base_elevada = uno_mas_r ** n
-    inverso = Decimal('1') / base_elevada
-    denominador = Decimal('1') - inverso
-    numerador = P * r
-    pago = numerador / denominador
-    return pago.quantize(Decimal('0.01'))
-
-# =========================================
 # Procesar mensajes - Parte de simulación (Opción 1)
 # =========================================
 
