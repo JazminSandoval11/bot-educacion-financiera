@@ -168,10 +168,10 @@ def procesar_mensaje(mensaje, numero):
     subflujo_critico = False
     if numero in estado_usuario:
         # Estados que consideramos "críticos":
-        # "desde_cuando1", "desde2", "abono_extra1", "abono_extra2", "riesgo"
+        # "desde_cuando1", "desde2", "abono_extra1", "abono_extra2", "riesgo", "subopcion_prestamo"
         # (o cualquiera donde no queramos que el menú se dispare)
         esperando = estado_usuario[numero].get("esperando")
-        if esperando in ["desde_cuando1", "desde2", "abono_extra1", "abono_extra2", "riesgo"]:
+        if esperando in ["desde_cuando1", "desde2", "abono_extra1", "abono_extra2", "riesgo", "subopcion_prestamo"]:
             subflujo_critico = True
 
     # Menú principal (1..8) sólo se evalúa si NO estás en un subflujo crítico
