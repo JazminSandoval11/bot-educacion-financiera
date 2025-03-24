@@ -469,9 +469,9 @@ def procesar_mensaje(mensaje, numero):
                 return (
                     "Para calcular la tasa anual real, necesito saber "
                     "cuántos periodos hay en 1 año. Ejemplo:\n"
-                    "• 12 si los pagos son mensuales\n"
-                    "• 24 si los pagos son quincenales\n"
-                    "• 52 si son semanales\n\n"
+                    "12 si los pagos son mensuales\n"
+                    "24 si los pagos son quincenales\n"
+                    "52 si son semanales\n\n"
                     "Dime cuántos periodos hay en 1 año:"
                 )
             except:
