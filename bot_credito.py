@@ -825,27 +825,3 @@ def procesar_mensaje(mensaje, numero):
 
     # Si no se cumplió ningún estado
     return "No entendí. Escribe *menú* para ver las opciones."
-
-@app.route("/webhook", methods=["GET", "POST"])
-def webhook():
-    if request.method == "GET":
-        verify_token = request.args.get("hub.verify_token")
-        challenge = request.args.get("hub.challenge")
-        if verify_token == "arrocito2024":
-            return challenge
-        return "Token inválido", 403
-
-    if request.method == "POST":
-        data = request.get_json()
-        try:
-            mensaje = data['entry'][0]['changes'][0]['value']['messages'][0]['text']['body']
-            numero = data['entry'][0]['changes'][0]['value']['messages'][0]['from']
-        except:
-            return "ok", 200
-
-        respuesta = procesar_mensaje(mensaje, numero)
-        enviar_mensaje(numero, respuesta)
-        return "ok", 200
-
-# if __name__ == "__main__":
-#     app.run(debug=True)
