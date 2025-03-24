@@ -86,40 +86,34 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
 # Costo real de compras a pagos fijos
 # =========================================
 def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, periodos_anuales):
-    precio = Decimal(str(precio_contado))
-    cuota = Decimal(str(pago_periodico))
-    n = int(num_pagos)
+    try:
+        precio = Decimal(str(precio_contado))
+        cuota = Decimal(str(pago_periodico))
+        n = int(num_pagos)
+        p = int(periodos_anuales)
 
-    saldo = precio
-    r_estimada = Decimal('0.05')
+        if precio <= 0 or cuota <= 0 or n <= 0 or p <= 0:
+            raise ValueError("Todos los valores deben ser mayores a cero.")
 
-    for _ in range(100):
-        try:
-            base = (Decimal('1') + r_estimada) ** (-n)
-            pago_calculado = saldo * r_estimada / (1 - base)
-            diferencia = pago_calculado - cuota
-            if abs(diferencia) < Decimal('0.0001'):
-                break
-            r_estimada -= diferencia / 1000
-        except:
-            break
+        total_pagado = cuota * n
+        intereses = total_pagado - precio
 
-    tasa_periodo = max(r_estimada, Decimal("0.0000001"))  # Evita tasas negativas o cero
-    total_pagado = cuota * n
-    intereses = total_pagado - precio
+        # Cálculo directo de la tasa de interés por periodo:
+        razon_total = total_pagado / precio
+        raiz_n = razon_total ** (Decimal("1") / n)
+        tasa_periodo = raiz_n - Decimal("1")
 
-    if periodos_anuales <= 0:
-        raise ValueError("Número de periodos anuales no válido")
+        # Cálculo de la tasa anual equivalente:
+        tasa_anual = (Decimal("1") + tasa_periodo) ** Decimal(p) - Decimal("1")
 
-    tasa_anual = ((Decimal('1') + tasa_periodo) ** Decimal(periodos_anuales)) - Decimal('1')
-
-    return (
-        total_pagado.quantize(Decimal("0.01")),
-        intereses.quantize(Decimal("0.01")),
-        (tasa_periodo * 100).quantize(Decimal("0.01")),
-        (tasa_anual * 100).quantize(Decimal("0.01"))
-    )
-
+        return (
+            total_pagado.quantize(Decimal("0.01")),
+            intereses.quantize(Decimal("0.01")),
+            (tasa_periodo * 100).quantize(Decimal("0.01")),
+            (tasa_anual * 100).quantize(Decimal("0.01"))
+        )
+    except Exception as e:
+        raise ValueError(f"Error al calcular: {e}")
 # =========================================
 # Menú principal
 # =========================================
