@@ -457,7 +457,7 @@ def procesar_mensaje(mensaje, numero):
                 contexto["esperando"] = "pagos_fijos"
                 return (
                     "2️⃣ ¿Cuánto pagas mensualmente en créditos formales o instituciones financieras?\n"
-                    "(No incluyas comida, renta, etc.)"
+                    "(Es decir, en pagos de préstamos personales, hipotecas, crédito de auto, crédito de nómina, entre otros, que tienes con bancos u otras entidades financieras)"
                 )
             except:
                 return "Por favor, escribe un número válido (ej: 12500)"
