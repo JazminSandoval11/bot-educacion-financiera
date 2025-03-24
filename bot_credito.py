@@ -600,8 +600,11 @@ def procesar_mensaje(mensaje, numero):
                     "   - www.burodecredito.com.mx ofrece un reporte gratuito.\n"
                     "________________________________________\n"
                 "Escribe *menú* para volver."
-            )
-
+)
+            else:
+                # Si no dijo "sí", sacamos al usuario del estado
+                estado_usuario.pop(numero)
+                return "Entiendo. Escribe *menú* para más opciones."
     # Si no coincide con nada:
     return (
         "No entendí tu solicitud. Escribe *menú* para ver las opciones disponibles."
