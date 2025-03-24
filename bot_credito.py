@@ -161,17 +161,18 @@ def procesar_mensaje(mensaje, numero):
     texto_limpio = mensaje.strip().lower()
 
     # -------------------------------
-    # Evitar menú si estamos en pasos críticos:
-    # Ej. cuando el bot está preguntando "¿A partir de qué periodo comenzarás a abonar extra?"
-    # Que no interprete "3" como "opción 3 del menú"
+    # Evitar menú si estamos en pasos críticos
     # -------------------------------
     subflujo_critico = False
     if numero in estado_usuario:
-        # Estados que consideramos "críticos":
-        # "desde_cuando1", "desde2", "abono_extra1", "abono_extra2", "riesgo", "subopcion_prestamo"
-        # (o cualquiera donde no queramos que el menú se dispare)
         esperando = estado_usuario[numero].get("esperando")
-        if esperando in ["desde_cuando1", "desde2", "abono_extra1", "abono_extra2", "riesgo", "subopcion_prestamo"]:
+        if esperando in [
+            "desde_cuando1", "desde2",
+            "abono_extra1", "abono_extra2",
+            "riesgo", "subopcion_prestamo",
+            # Y el submenu que definiremos pronto
+            "submenu_despues_de_maximo",
+        ]:
             subflujo_critico = True
 
     # Menú principal (1..8) sólo se evalúa si NO estás en un subflujo crítico
@@ -329,7 +330,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Ocurrió un error al calcular el ahorro. Revisa tus datos."
 
-        # ==== FLUJO 1: Simulación original (monto_credito, plazo_credito, etc.) ====
+        # ==== FLUJO 1: Simulación original ====
         if contexto["esperando"] == "monto_credito":
             try:
                 contexto["monto"] = Decimal(mensaje.replace(",", ""))
@@ -489,7 +490,8 @@ def procesar_mensaje(mensaje, numero):
                 return "Elige 1, 2 o 3 según tu nivel de riesgo."
 
             contexto["riesgo"] = riesgo
-            porcentaje_riesgo = {"1": Decimal("0.60"), "2": Decimal("0.45"), "3": Decimal("0.30")}[riesgo]
+            porcentajes = {"1": Decimal("0.60"), "2": Decimal("0.45"), "3": Decimal("0.30")}
+            porcentaje_riesgo = porcentajes[riesgo]
             ingreso = contexto["ingreso"]
             pagos_fijos = contexto["pagos_fijos"]
             deuda_revolvente = contexto["deuda_revolvente"]
@@ -530,6 +532,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Número inválido."
 
+        # Aquí hacemos el cambio para mostrar un submenú en lugar de terminar:
         if contexto["esperando"] == "tasa_simular":
             try:
                 tasa = Decimal(mensaje.replace(",", ""))
@@ -540,14 +543,33 @@ def procesar_mensaje(mensaje, numero):
                 inverso = Decimal("1") / potencia
                 factor = (Decimal("1") - inverso) / tasa
                 monto_maximo = (capacidad * factor).quantize(Decimal("0.01"))
-                estado_usuario.pop(numero)
+
+                # Creamos un nuevo estado de submenú
+                contexto["monto_maximo"] = monto_maximo
+                contexto["esperando"] = "submenu_despues_de_maximo"
 
                 return (
                     f"✅ Con base en tu capacidad de pago de ${capacidad}, podrías aspirar a un crédito de hasta ${monto_maximo}.\n\n"
-                    "Escribe *menú* para volver."
+                    "¿Te gustaría ahora validar un crédito específico o volver al menú?\n"
+                    "1. Validar un crédito\n"
+                    "2. Regresar al menú\n"
+                    "Escribe 1 o 2."
                 )
             except:
                 return "Verifica tu tasa (ejemplo: 0.025)."
+
+        # Nuevo submenú: submenu_despues_de_maximo
+        if contexto["esperando"] == "submenu_despues_de_maximo":
+            if texto_limpio == "1":
+                # Ir directo a validar un crédito
+                contexto["esperando"] = "monto_credito_deseado"
+                return "💰 ¿De cuánto sería el crédito que te interesa solicitar?"
+            elif texto_limpio == "2":
+                # Regresar al menú
+                estado_usuario.pop(numero)
+                return "Listo, escribe *menú* para ver más opciones."
+            else:
+                return "Por favor, escribe 1 o 2."
 
         if contexto["esperando"] == "monto_credito_deseado":
             try:
