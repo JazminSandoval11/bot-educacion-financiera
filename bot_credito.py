@@ -687,13 +687,29 @@ if texto_limpio in ["7", "errores comunes al solicitar un crédito"]:
             if texto_limpio == "sí":
                 estado_usuario.pop(numero)
                 return (
-                    "📂 *Cómo mejorar tu historial crediticio*\n"
-                    "1. Paga a tiempo (aunque sea mínimo)\n"
-                    "2. Usa tarjetas con moderación (30-40% del límite)\n"
-                    "3. No abras muchos créditos juntos\n"
-                    "4. Usa algún crédito, aunque sea pequeño\n"
-                    "5. Revisa tu historial al menos 1 vez al año (www.burodecredito.com.mx)\n\n"
-                    "Escribe *menú*."
+            "¿Cómo mejorar mi historial crediticio?\n"
+            "Aquí tienes algunos consejos prácticos para mejorar tu score en Buró de Crédito y tener un historial más saludable 📈\n"
+            "________________________________________\n"
+            "🔹 1. Paga a tiempo, siempre\n"
+            "📌 Aunque sea el pago mínimo, evita atrasarte.\n"
+            "✅ La puntualidad pesa mucho en tu historial.\n"
+            "________________________________________\n"
+            "🔹 2. Usa tus tarjetas con moderación\n"
+            "📌 Trata de no usar más del 30%-40% del límite de tu tarjeta.\n"
+            "✅ Usarlas hasta el tope te resta puntos, aunque pagues.\n"
+            "________________________________________\n"
+            "🔹 3. No abras muchos créditos al mismo tiempo\n"
+            "📌 Si pides varios préstamos en poco tiempo, parecerá que estás desesperado/a por dinero.\n"
+            "✅ Ve uno a la vez y maneja bien el que tienes.\n"
+            "________________________________________\n"
+            "🔹 4. Usa algún crédito, aunque sea pequeño\n"
+            "📌 Si no tienes historial, nunca tendrás score.\n"
+            "✅ Una tarjeta departamental o un plan telefónico pueden ser un buen inicio si los manejas bien.\n"
+            "________________________________________\n"
+            "🔹 5. Revisa tu historial al menos una vez al año\n"
+            "📌 Puedes pedir un reporte gratuito en www.burodecredito.com.mx\n"
+            "✅ Asegúrate de que no haya errores y de que tus datos estén correctos.\n"
+            "Escribe *menú*."
                 )
             else:
                 estado_usuario.pop(numero)
