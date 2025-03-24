@@ -486,41 +486,39 @@ def procesar_mensaje(mensaje, numero):
             return "Ocurrió un error al calcular el ahorro. Revisa tus datos."
 
     # Opción 3 (compras a pagos fijos) - Ajustado para periodos anuales
-    if contexto.get("esperando") == "precio_contado":
-        try:
-            contexto["precio_contado"] = Decimal(mensaje.replace(",", ""))
-            contexto["esperando"] = "pago_fijo_tienda"
-            return "2️⃣ ¿De cuánto será cada pago (por ejemplo: 250)?"
-        except:
-            return "Por favor, indica el precio de contado con números (ejemplo: 1800)"
+if contexto.get("esperando") == "precio_contado":
+    try:
+        contexto["precio_contado"] = Decimal(mensaje.replace(",", ""))
+        contexto["esperando"] = "pago_fijo_tienda"
+        return "2️⃣ ¿De cuánto será cada pago (por ejemplo: 250)?"
+    except:
+        return "Por favor, indica el precio de contado con números (ejemplo: 1800)"
 
-    if contexto.get("esperando") == "pago_fijo_tienda":
-        try:
-            contexto["pago_fijo_tienda"] = Decimal(mensaje.replace(",", ""))
-            contexto["esperando"] = "numero_pagos_tienda"
-            return "3️⃣ ¿Cuántos pagos harás en total?"
-        except:
-            return "Cantidad inválida. Intenta con un número."
+if contexto.get("esperando") == "pago_fijo_tienda":
+    try:
+        contexto["pago_fijo_tienda"] = Decimal(mensaje.replace(",", ""))
+        contexto["esperando"] = "numero_pagos_tienda"
+        return "3️⃣ ¿Cuántos pagos harás en total?"
+    except:
+        return "Cantidad inválida. Intenta con un número."
 
-    if contexto.get("esperando") == "numero_pagos_tienda":
-        try:
-            # parse int robusto
-            # si falla, mostrará el except
-            numero_pagos = parsear_a_entero(mensaje)
-            contexto["numero_pagos_tienda"] = numero_pagos
-            contexto["esperando"] = "pedir_periodos_anuales_tienda"
-            return (
-                "Para calcular la tasa anual real, necesito saber "
-                "cuántos periodos hay en 1 año. Ejemplo:\n"
-                "12 si los pagos son mensuales\n"
-                "24 si los pagos son quincenales\n"
-                "52 si son semanales\n\n"
-                "Dime cuántos periodos hay en 1 año (solo el número):"
-            )
-        except:
-            return "Ocurrió un error. Indica cuántos pagos totales harás (ejemplo: 24)."
+if contexto.get("esperando") == "numero_pagos_tienda":
+    try:
+        numero_pagos = parsear_a_entero(mensaje)
+        contexto["numero_pagos_tienda"] = numero_pagos
+        contexto["esperando"] = "pedir_periodos_anuales_tienda"
+        return (
+            "Para calcular la tasa anual real, necesito saber "
+            "cuántos periodos hay en 1 año. Ejemplo:\n"
+            "12 si los pagos son mensuales\n"
+            "24 si los pagos son quincenales\n"
+            "52 si son semanales\n\n"
+            "Dime cuántos periodos hay en 1 año (solo el número):"
+        )
+    except:
+        return "Ocurrió un error. Indica cuántos pagos totales harás (ejemplo: 24)."
 
-    if contexto.get("esperando") == "pedir_periodos_anuales_tienda":
+if contexto.get("esperando") == "pedir_periodos_anuales_tienda":
     try:
         periodos_anuales = int(parsear_a_entero(mensaje))
 
@@ -535,7 +533,6 @@ def procesar_mensaje(mensaje, numero):
             periodos_anuales
         )
 
-        # Al final limpiamos el estado
         estado_usuario.pop(numero)
 
         return (
