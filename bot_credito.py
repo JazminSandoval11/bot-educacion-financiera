@@ -599,18 +599,6 @@ def procesar_mensaje(mensaje, numero):
                     "🔹 5. Revisa tu historial al menos una vez al año\n"
                     "   - www.burodecredito.com.mx ofrece un reporte gratuito.\n"
                     "________________________________________\n"
-                    "Si quieres el link directo al reporte gratis, escribe *reporte*.\n"
-                    "O escribe *menú* para regresar al inicio."
-                )
-            else:
-                estado_usuario.pop(numero)
-                return "Entiendo. Escribe *menú* para más opciones."
-
-        # Si escribe "reporte" cuando estamos en algún estado
-        if texto_limpio == "reporte":
-            return (
-                "Aquí tienes el enlace oficial para consultar tu reporte gratuito de Buró de Crédito:\n"
-                "➡️ https://www.burodecredito.com.mx\n\n"
                 "Escribe *menú* para volver."
             )
 
