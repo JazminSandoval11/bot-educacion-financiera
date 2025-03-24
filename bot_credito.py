@@ -92,7 +92,7 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
     )
 
 # =========================================
-# Cálculo del costo real de compras a pagos fijos en tiendas
+# Cálculo del costo real de compras a pagos fijos en tiendas departamentales
 # =========================================
 def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos):
     """
@@ -138,8 +138,8 @@ saludo_inicial = (
     "¿Sobre qué aspecto del crédito necesitas ayuda hoy?\n"
     "Escríbeme el número o el nombre de alguna de estas opciones para empezar:\n\n"
     "1️⃣ Simular un crédito\n"
-    "2️⃣ Ver cuánto me ahorro si doy pagos extra al crédito\n"
-    "3️⃣ Calcular el costo real de compras a pagos fijos en tiendas\n"
+    "2️⃣ Ver cuánto ahorro si doy pagos extras a un crédito\n"
+    "3️⃣ Calcular el costo real de compras a pagos fijos en tiendas departamentales\n"
     "4️⃣ ¿Cuánto me pueden prestar?\n"
     "5️⃣ Consejos para pagar un crédito sin ahogarte\n"
     "6️⃣ Cómo identificar un crédito caro\n"
@@ -178,7 +178,7 @@ def procesar_mensaje(mensaje, numero):
         return "Para estimar tu ahorro con pagos extra, primero dime el Monto del crédito."
 
     # Opción 3: Calcular costo real de compras a pagos fijos
-    if texto_limpio in ["3", "calcular el costo real de compras a pagos fijos en tiendas"]:
+    if texto_limpio in ["3", "calcular el costo real de compras a pagos fijos en tiendas departamentales"]:
         estado_usuario[numero] = {"esperando": "precio_contado"}
         return (
             "Vamos a calcular el costo real de una compra a pagos fijos.\n"
