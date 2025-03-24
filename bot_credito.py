@@ -141,6 +141,13 @@ def procesar_mensaje(mensaje, numero):
             elif mensaje == "no":
                 estado_usuario[numero] = {}
                 return "Ok, pero si gustas reconsiderarlo porque realmente es algo útil, lo revisamos después 😊"
+from decimal import Decimal, getcontext
+
+# Suponiendo que existe una función para el pago fijo (ajusta la fórmula según tu caso real).
+def calcular_pago_fijo_excel(P, r, n):
+    # Ejemplo genérico (fórmula de anualidad):
+    return (P * r) / (1 - (1 + r) ** -n)
+
 # ============================================================
 # Cálculo del ahorro con abonos extra (ajuste de último pago)
 # ============================================================
@@ -160,7 +167,7 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
     ultimo_pago = Decimal('0.00')
 
     while saldo > 0:
-        # Separamos estas líneas para evitar error de sintaxis
+        # Separar en dos líneas para evitar error de sintaxis
         interes = saldo * r
         abono_a_capital = pago_fijo - interes
 
@@ -168,7 +175,7 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
         if periodo >= desde:
             abono_a_capital += abono
 
-        # Si el abono a capital ya cubre el saldo, terminamos
+        # Si el abono a capital cubre todo el saldo, se calcula el último pago
         if abono_a_capital >= saldo:
             interes_final = saldo * r
             ultimo_pago = saldo + interes_final
@@ -193,12 +200,10 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
         pagos_ahorrados
     )
 
-
 # ============================================
 # Conectar flujo si el usuario quiere abonar
 # ============================================
-# Ojo: aquí asumo que este bloque debe estar FUERA de la función anterior,
-# en el nivel superior (y con indentación de 0, como se ve).
+# Este bloque debe estar al mismo nivel que la función anterior (no dentro de ella)
 if contexto["esperando"] == "abono_extra":
     try:
         contexto["abono"] = Decimal(mensaje.replace(",", ""))
@@ -218,7 +223,9 @@ if contexto["esperando"] == "desde_cuando":
             contexto["abono"],
             desde
         )
+        # Se asume que estado_usuario y numero están definidos y se usan para limpiar el estado
         estado_usuario.pop(numero)
+
         return (
             f"💸 Si pagaras este crédito sin hacer abonos extra, terminarías pagando ${total_sin} en total.\n\n"
             f"Pero si decides abonar ${contexto['abono']} adicionales por periodo desde el periodo {desde}...\n"
@@ -228,43 +235,6 @@ if contexto["esperando"] == "desde_cuando":
         )
     except:
         return "Ocurrió un error al calcular el ahorro. Por favor revisa tus datos."
-Revisa especialmente:
-La línea interes = saldo * r debe estar separada de abono_a_capital = pago_fijo - interes.
-
-La indentación de los if contexto["esperando"] ... al final, para que no estén dentro de la función (a menos que esa sea tu intención).
-
-Usa la misma cantidad de espacios en toda la función o en todo el archivo (generalmente 4 espacios por nivel de indentación, o tabs, pero no mezclar).
-
-Con esto, debería solucionarse el error IndentationError: unexpected indent y también el problema de sintaxis.
-
-
-
-
-
-
-
-Tú dijiste:
-puedes proporcionarme cómo debería quedar?
-ChatGPT Plus
-Razonado sobre el error de indentación durante 13 segundos
-A continuación te dejo un ejemplo de cómo quedaría el código con la indentación correcta y separando las líneas que causaban error. Siéntete libre de ajustarlo a tu lógica/variables reales si tu archivo completo tiene más secciones.
-
-Puntos importantes que corregimos:
-
-Separar la línea que contenía interes = saldo * r abono_a_capital = ... en dos asignaciones independientes.
-
-Alinear la indentación para que el bloque de if contexto["esperando"] == "abono_extra": esté fuera de la función calcular_ahorro_por_abonos().
-
-python
-Copiar
-Editar
-from decimal import Decimal, getcontext
-
-# Suponiendo que existe una función para el pago fijo (ajusta la fórmula según tu caso real).
-def calcular_pago_fijo_excel(P, r, n):
-    # Ejemplo genérico (fórmula de anualidad):
-    return (P * r) / (1 - (1 + r) ** -n)
-
 # ============================================================
 # Cálculo del ahorro con abonos extra (ajuste de último pago)
 # ============================================================
