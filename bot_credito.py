@@ -139,7 +139,7 @@ saludo_inicial = (
     "¿Sobre qué aspecto del crédito necesitas ayuda hoy?\n"
     "Escríbeme el número o el nombre de alguna de estas opciones para empezar:\n\n"
     "1️⃣ Simular un crédito\n"
-    "2️⃣ Ver cuánto me ahorro si doy pagos extra al crédito\n"
+    "2️⃣ Ver cuánto me ahorro si doy pagos extra al crédito (continuación de 1)\n"
     "3️⃣ Calcular el costo real de compras a pagos fijos en tiendas\n"
     "4️⃣ ¿Cuánto me pueden prestar?\n"
     "5️⃣ Consejos para pagar un crédito sin ahogarte\n"
@@ -162,17 +162,142 @@ def procesar_mensaje(mensaje, numero):
     # Normaliza el texto
     texto_limpio = mensaje.strip().lower()
 
-    # Si el usuario dice "hola" o "menú", reiniciamos su estado y mostramos el menú
+    # -- MENÚ PRINCIPAL: Reconocer opciones 1–8 aunque no haya estado previo --
+
     if texto_limpio in ["hola", "menú", "menu"]:
         estado_usuario[numero] = {}
         return saludo_inicial
 
-    # Si el usuario elige la opción 1: Simular un crédito
+    # Opción 1: Simular un crédito
     if texto_limpio in ["1", "simular un crédito"]:
         estado_usuario[numero] = {"esperando": "monto_credito"}
         return "Perfecto. Para comenzar, dime el monto del crédito que deseas simular."
 
-    # Verificamos si el usuario tiene un estado de conversación
+    # NOTA sobre Opción 2:
+    # En este código original, la opción “2” (ver cuánto me ahorro) se maneja
+    # como parte del flujo de la Opción 1. De hecho, no hay un if principal para “2”
+    # porque asume que primero se simula un crédito (o sea, no la maneja de forma independiente).
+    #
+    # Si quieres que la gente ponga “2” desde cero, necesitarías un nuevo flujo
+    # (monto, plazo, tasa) y luego la parte de abonos. Este ejemplo mantiene la lógica original.
+
+    # Opción 3: Calcular costo real de compras a pagos fijos
+    if texto_limpio in ["3", "calcular el costo real de compras a pagos fijos en tiendas"]:
+        # Empezamos un flujo nuevo para esa simulación
+        estado_usuario[numero] = {"esperando": "precio_contado"}
+        return (
+            "Vamos a calcular el costo real de una compra a pagos fijos.\n"
+            "Por favor dime lo siguiente:\n\n"
+            "1️⃣ ¿Cuál es el precio de contado del producto?"
+        )
+
+    # Opción 4: ¿Cuánto me pueden prestar?
+    if texto_limpio in ["4", "¿cuánto me pueden prestar?"]:
+        estado_usuario[numero] = {"esperando": "ingreso"}
+        return (
+            "Vamos a calcular cuánto podrías solicitar como crédito, con base en tu capacidad de pago.\n\n"
+            "Primero necesito saber:\n"
+            "1️⃣ ¿Cuál es tu ingreso neto mensual? (Después de impuestos y deducciones)"
+        )
+
+    # Opción 5: Consejos para pagar un crédito sin ahogarte
+    if texto_limpio in ["5", "consejos para pagar un crédito sin ahogarte"]:
+        return (
+            "🟡 *Consejos para pagar un crédito sin ahogarte*\n"
+            "Pagar un crédito no tiene que sentirse como una carga eterna. Aquí van algunos consejos sencillos:\n"
+            "________________________________________\n"
+            "✅ 1. Haz pagos anticipados cuando puedas\n"
+            "   - Abonar algo extra te ahorra intereses y reduce el plazo.\n"
+            "________________________________________\n"
+            "✅ 2. Programa tus pagos en automático\n"
+            "   - Evitas atrasos y recargos.\n"
+            "________________________________________\n"
+            "✅ 3. Revisa si puedes cambiar tu crédito por uno mejor\n"
+            "   - Llamado “reestructura” o “portabilidad”.\n"
+            "________________________________________\n"
+            "✅ 4. Haz un presupuesto mensual\n"
+            "   - Conocer ingresos y gastos te ayuda a no fallar en pagos.\n"
+            "________________________________________\n"
+            "✅ 5. Prioriza las deudas más caras\n"
+            "   - Enfócate primero en las que tienen la tasa más alta.\n"
+            "________________________________________\n"
+            "¿Te gustaría simular cuánto podrías ahorrar con pagos extra?\n"
+            "Dime *simular un crédito* o *menú* para regresar."
+        )
+
+    # Opción 6: Cómo identificar un crédito caro
+    if texto_limpio in ["6", "cómo identificar un crédito caro"]:
+        return (
+            "🟡 *Cómo identificar un crédito caro*\n"
+            "________________________________________\n"
+            "🔍 1. CAT (Costo Anual Total)\n"
+            "   - Incluye tasa de interés, comisiones y cargos.\n"
+            "________________________________________\n"
+            "🔍 2. Comisiones escondidas\n"
+            "   - Apertura, manejo, pagos tardíos, etc.\n"
+            "________________________________________\n"
+            "🔍 3. Tasa de interés variable\n"
+            "   - Puede subir con la inflación y encarecer el crédito.\n"
+            "________________________________________\n"
+            "🔍 4. Pago mensual muy bajo con plazo largo\n"
+            "   - Terminas pagando muchísimo en intereses.\n"
+            "________________________________________\n"
+            "¡Ojo! Si no entiendes bien el total a pagar, es una alerta.\n"
+            "¿Te gustaría que comparemos dos créditos específicos?\n"
+            "Si sí, dime los datos o escribe *menú* para volver."
+        )
+
+    # Opción 7: Errores comunes al solicitar un crédito
+    if texto_limpio in ["7", "errores comunes al solicitar un crédito"]:
+        return (
+            "🟡 *Errores comunes al solicitar un crédito*\n"
+            "________________________________________\n"
+            "❌ 1. No saber el total a pagar\n"
+            "   - No te fijes solo en el pago mensual.\n"
+            "________________________________________\n"
+            "❌ 2. Pedir más dinero del que necesitas\n"
+            "   - A mayor monto, más intereses.\n"
+            "________________________________________\n"
+            "❌ 3. Aceptar el primer crédito sin comparar\n"
+            "   - Hay diferencias enormes entre instituciones.\n"
+            "________________________________________\n"
+            "❌ 4. No leer el contrato completo\n"
+            "   - Ahí están las comisiones, recargos, etc.\n"
+            "________________________________________\n"
+            "❌ 5. Usar un crédito sin un plan de pago\n"
+            "   - Haz un presupuesto antes de tomarlo.\n"
+            "________________________________________\n"
+            "¿Te gustaría planear mejor tu crédito?\n"
+            "Escribe *simular un crédito* o *menú*."
+        )
+
+    # Opción 8: Entender el Buró de Crédito
+    if texto_limpio in ["8", "entender el buró de crédito"]:
+        # Iniciamos un subestado
+        estado_usuario[numero] = {"esperando": "submenu_buro"}
+        return (
+            "🟡 *Entender el Buró de Crédito*\n"
+            "El Buró no es un enemigo; es un registro de tu comportamiento crediticio.\n"
+            "________________________________________\n"
+            "📊 ¿Qué es el Buró de Crédito?\n"
+            "   - Una empresa que guarda tu historial de pagos.\n"
+            "________________________________________\n"
+            "💡 Tener historial no es malo.\n"
+            "   - De hecho, si nunca has tenido créditos, tu score estará vacío.\n"
+            "________________________________________\n"
+            "📈 Tu comportamiento crea un “score”.\n"
+            "   - Pagos puntuales te ayudan.\n"
+            "   - Retrasos frecuentes te perjudican.\n"
+            "________________________________________\n"
+            "❗ “Estoy en Buró” no significa “lista negra”.\n"
+            "   - Los registros duran años, no se borran fácilmente.\n"
+            "________________________________________\n"
+            "¿Quieres saber cómo mejorar tu score?\n"
+            "Responde *sí* o *no*."
+        )
+
+    # -- AHORA SÍ: Manejo de ESTADOS (si ya se inició algún flujo) --
+
     if numero in estado_usuario and "esperando" in estado_usuario[numero]:
         contexto = estado_usuario[numero]
 
@@ -207,7 +332,7 @@ def procesar_mensaje(mensaje, numero):
 
                 contexto["tasa"] = tasa
                 contexto["pago_fijo"] = pago
-                # Guardamos datos para opción 2 (abonos)
+                # Guardamos datos para "2" (abonos)
                 contexto["esperando"] = "ver_si_abonos"
 
                 return (
@@ -230,7 +355,7 @@ def procesar_mensaje(mensaje, numero):
             else:
                 return "Por favor, responde solo *sí* o *no*."
 
-        # Opción 2: Abonos extra (ya viene encadenado de la opción 1)
+        # (2) Abonos extra, continua la simulación
         if contexto["esperando"] == "abono_extra":
             try:
                 contexto["abono"] = Decimal(mensaje.replace(",", ""))
@@ -261,15 +386,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Ocurrió un error al calcular el ahorro. Por favor revisa tus datos."
 
-        # Opción 3: Calcular el costo real de compras a pagos fijos
-        if texto_limpio in ["3", "calcular el costo real de compras a pagos fijos en tiendas"]:
-            estado_usuario[numero] = {"esperando": "precio_contado"}
-            return (
-                "Vamos a calcular el costo real de una compra a pagos fijos.\n"
-                "Por favor dime lo siguiente:\n\n"
-                "1️⃣ ¿Cuál es el precio de contado del producto?"
-            )
-
+        # Opción 3: (sigue el flujo)
         if contexto["esperando"] == "precio_contado":
             try:
                 contexto["precio_contado"] = Decimal(mensaje.replace(",", ""))
@@ -278,7 +395,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor, indica el precio de contado con números (ejemplo: 1800)"
 
-        if contexto.get("esperando") == "pago_fijo_tienda":
+        if contexto["esperando"] == "pago_fijo_tienda":
             try:
                 contexto["pago_fijo_tienda"] = Decimal(mensaje.replace(",", ""))
                 contexto["esperando"] = "numero_pagos_tienda"
@@ -286,7 +403,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor, escribe solo la cantidad del pago fijo (ejemplo: 250)"
 
-        if contexto.get("esperando") == "numero_pagos_tienda":
+        if contexto["esperando"] == "numero_pagos_tienda":
             try:
                 num_pagos = int(mensaje.strip())
                 total, intereses, tasa_periodo, tasa_anual = calcular_costo_credito_tienda(
@@ -308,16 +425,8 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Ocurrió un error al calcular el crédito. Revisa tus datos e intenta de nuevo."
 
-        # Opción 4: ¿Cuánto me pueden prestar?
-        if texto_limpio in ["4", "¿cuánto me pueden prestar?"]:
-            estado_usuario[numero] = {"esperando": "ingreso"}
-            return (
-                "Vamos a calcular cuánto podrías solicitar como crédito, con base en tu capacidad de pago.\n\n"
-                "Primero necesito saber:\n"
-                "1️⃣ ¿Cuál es tu ingreso neto mensual? (Después de impuestos y deducciones)"
-            )
-
-        if contexto.get("esperando") == "ingreso":
+        # Opción 4: (sigue el flujo)
+        if contexto["esperando"] == "ingreso":
             try:
                 contexto["ingreso"] = Decimal(mensaje.replace(",", ""))
                 contexto["esperando"] = "pagos_fijos"
@@ -328,7 +437,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor, escribe solo el ingreso mensual en números (ejemplo: 12500)"
 
-        if contexto.get("esperando") == "pagos_fijos":
+        if contexto["esperando"] == "pagos_fijos":
             try:
                 contexto["pagos_fijos"] = Decimal(mensaje.replace(",", ""))
                 contexto["esperando"] = "deuda_revolvente"
@@ -338,7 +447,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor, indica solo la cantidad mensual que pagas en créditos (ejemplo: 1800)"
 
-        if contexto.get("esperando") == "deuda_revolvente":
+        if contexto["esperando"] == "deuda_revolvente":
             try:
                 contexto["deuda_revolvente"] = Decimal(mensaje.replace(",", ""))
                 contexto["esperando"] = "riesgo"
@@ -352,12 +461,11 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor, indica el monto total que debes en tarjetas u otros créditos revolventes."
 
-        if contexto.get("esperando") == "riesgo":
+        if contexto["esperando"] == "riesgo":
             riesgo = texto_limpio
             if riesgo not in ["1", "2", "3"]:
                 return "Por favor, escribe 1, 2 o 3 para indicar tu nivel de riesgo."
 
-            # Calculamos capacidad mensual
             contexto["riesgo"] = riesgo
             porcentaje_riesgo = {"1": Decimal("0.60"), "2": Decimal("0.45"), "3": Decimal("0.30")}[riesgo]
             ingreso = contexto["ingreso"]
@@ -381,7 +489,7 @@ def procesar_mensaje(mensaje, numero):
                 "Escribe 1 o 2 para continuar."
             )
 
-        if contexto.get("esperando") == "subopcion_prestamo":
+        if contexto["esperando"] == "subopcion_prestamo":
             opcion = texto_limpio
             if opcion == "1":
                 contexto["esperando"] = "plazo_simular"
@@ -392,7 +500,7 @@ def procesar_mensaje(mensaje, numero):
             else:
                 return "Por favor, escribe 1 para simular el monto máximo o 2 para validar un crédito que ya tienes en mente."
 
-        if contexto.get("esperando") == "plazo_simular":
+        if contexto["esperando"] == "plazo_simular":
             try:
                 contexto["plazo_simular"] = Decimal(mensaje.replace(",", ""))
                 contexto["esperando"] = "tasa_simular"
@@ -400,7 +508,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor, indica el plazo en cantidad de pagos (ejemplo: 24)"
 
-        if contexto.get("esperando") == "tasa_simular":
+        if contexto["esperando"] == "tasa_simular":
             try:
                 tasa = Decimal(mensaje.replace(",", ""))
                 plazo = contexto["plazo_simular"]
@@ -419,7 +527,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor asegúrate de indicar la tasa como número decimal (ejemplo: 0.025)."
 
-        if contexto.get("esperando") == "monto_credito_deseado":
+        if contexto["esperando"] == "monto_credito_deseado":
             try:
                 contexto["monto_deseado"] = Decimal(mensaje.replace(",", ""))
                 contexto["esperando"] = "plazo_deseado"
@@ -427,7 +535,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor, escribe solo la cantidad del crédito deseado (ejemplo: 300000)"
 
-        if contexto.get("esperando") == "plazo_deseado":
+        if contexto["esperando"] == "plazo_deseado":
             try:
                 contexto["plazo_deseado"] = Decimal(mensaje.replace(",", ""))
                 contexto["esperando"] = "tasa_deseada"
@@ -435,7 +543,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Por favor, indica el número total de pagos."
 
-        if contexto.get("esperando") == "tasa_deseada":
+        if contexto["esperando"] == "tasa_deseada":
             try:
                 monto = contexto["monto_deseado"]
                 plazo = contexto["plazo_deseado"]
@@ -469,104 +577,9 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Ocurrió un error al validar el crédito. Revisa tus datos y vuelve a intentarlo."
 
-        # Opción 5: Consejos para pagar un crédito sin ahogarte
-        if texto_limpio in ["5", "consejos para pagar un crédito sin ahogarte"]:
-            return (
-                "🟡 *Consejos para pagar un crédito sin ahogarte*\n"
-                "Pagar un crédito no tiene que sentirse como una carga eterna. Aquí van algunos consejos sencillos:\n"
-                "________________________________________\n"
-                "✅ 1. Haz pagos anticipados cuando puedas\n"
-                "   - Abonar algo extra te ahorra intereses y reduce el plazo.\n"
-                "________________________________________\n"
-                "✅ 2. Programa tus pagos en automático\n"
-                "   - Evitas atrasos y recargos.\n"
-                "________________________________________\n"
-                "✅ 3. Revisa si puedes cambiar tu crédito por uno mejor\n"
-                "   - Llamado “reestructura” o “portabilidad”.\n"
-                "________________________________________\n"
-                "✅ 4. Haz un presupuesto mensual\n"
-                "   - Conocer ingresos y gastos te ayuda a no fallar en pagos.\n"
-                "________________________________________\n"
-                "✅ 5. Prioriza las deudas más caras\n"
-                "   - Enfócate primero en las que tienen la tasa más alta.\n"
-                "________________________________________\n"
-                "¿Te gustaría simular cuánto podrías ahorrar con pagos extra?\n"
-                "Dime *simular un crédito* o *menú* para regresar."
-            )
-
-        # Opción 6: Cómo identificar un crédito caro
-        if texto_limpio in ["6", "cómo identificar un crédito caro"]:
-            return (
-                "🟡 *Cómo identificar un crédito caro*\n"
-                "________________________________________\n"
-                "🔍 1. CAT (Costo Anual Total)\n"
-                "   - Incluye tasa de interés, comisiones y cargos.\n"
-                "________________________________________\n"
-                "🔍 2. Comisiones escondidas\n"
-                "   - Apertura, manejo, pagos tardíos, etc.\n"
-                "________________________________________\n"
-                "🔍 3. Tasa de interés variable\n"
-                "   - Puede subir con la inflación y encarecer el crédito.\n"
-                "________________________________________\n"
-                "🔍 4. Pago mensual muy bajo con plazo largo\n"
-                "   - Terminas pagando muchísimo en intereses.\n"
-                "________________________________________\n"
-                "¡Ojo! Si no entiendes bien el total a pagar, es una alerta.\n"
-                "¿Te gustaría que comparemos dos créditos específicos?\n"
-                "Si sí, dime los datos o escribe *menú* para volver."
-            )
-
-        # Opción 7: Errores comunes al solicitar un crédito
-        if texto_limpio in ["7", "errores comunes al solicitar un crédito"]:
-            return (
-                "🟡 *Errores comunes al solicitar un crédito*\n"
-                "________________________________________\n"
-                "❌ 1. No saber el total a pagar\n"
-                "   - No te fijes solo en el pago mensual.\n"
-                "________________________________________\n"
-                "❌ 2. Pedir más dinero del que necesitas\n"
-                "   - A mayor monto, más intereses.\n"
-                "________________________________________\n"
-                "❌ 3. Aceptar el primer crédito sin comparar\n"
-                "   - Hay diferencias enormes entre instituciones.\n"
-                "________________________________________\n"
-                "❌ 4. No leer el contrato completo\n"
-                "   - Ahí están las comisiones, recargos, etc.\n"
-                "________________________________________\n"
-                "❌ 5. Usar un crédito sin un plan de pago\n"
-                "   - Haz un presupuesto antes de tomarlo.\n"
-                "________________________________________\n"
-                "¿Te gustaría planear mejor tu crédito?\n"
-                "Escribe *simular un crédito* o *menú*."
-            )
-
-        # Opción 8: Entender el Buró de Crédito
-        if texto_limpio in ["8", "entender el buró de crédito"]:
-            contexto["esperando"] = "submenu_buro"
-            return (
-                "🟡 *Entender el Buró de Crédito*\n"
-                "El Buró no es un enemigo; es un registro de tu comportamiento crediticio.\n"
-                "________________________________________\n"
-                "📊 ¿Qué es el Buró de Crédito?\n"
-                "   - Una empresa que guarda tu historial de pagos.\n"
-                "________________________________________\n"
-                "💡 Tener historial no es malo.\n"
-                "   - De hecho, si nunca has tenido créditos, tu score estará vacío.\n"
-                "________________________________________\n"
-                "📈 Tu comportamiento crea un “score”.\n"
-                "   - Pagos puntuales te ayudan.\n"
-                "   - Retrasos frecuentes te perjudican.\n"
-                "________________________________________\n"
-                "❗ “Estoy en Buró” no significa “lista negra”.\n"
-                "   - Los registros duran años, no se borran fácilmente.\n"
-                "________________________________________\n"
-                "¿Quieres saber cómo mejorar tu score?\n"
-                "Responde *sí* o *no*."
-            )
-
-        if contexto.get("esperando") == "submenu_buro":
+        # Submenú de Buró de Crédito
+        if contexto["esperando"] == "submenu_buro":
             if texto_limpio == "sí":
-                # Aquí podrías cambiar el estado a otra cosa si quisieras más preguntas
                 estado_usuario.pop(numero)
                 return (
                     "📂 *Cómo mejorar tu historial crediticio*\n"
@@ -593,6 +606,7 @@ def procesar_mensaje(mensaje, numero):
                 estado_usuario.pop(numero)
                 return "Entiendo. Escribe *menú* para más opciones."
 
+        # Si escribe "reporte" cuando estamos en algún estado
         if texto_limpio == "reporte":
             return (
                 "Aquí tienes el enlace oficial para consultar tu reporte gratuito de Buró de Crédito:\n"
@@ -600,7 +614,7 @@ def procesar_mensaje(mensaje, numero):
                 "Escribe *menú* para volver."
             )
 
-    # Si el mensaje no coincide con nada anterior, se muestra menú
+    # Si no coincide con nada:
     return (
         "No entendí tu solicitud. Escribe *menú* para ver las opciones disponibles."
     )
@@ -629,6 +643,5 @@ def webhook():
         enviar_mensaje(numero, respuesta)
         return "ok", 200
 
-# Si corres localmente, podrías habilitar:
 # if __name__ == "__main__":
 #     app.run(debug=True)
