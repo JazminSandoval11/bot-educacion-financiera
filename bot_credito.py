@@ -148,7 +148,7 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
     total_pagado = cuota * n
     intereses = total_pagado - precio
 
-    tasa_anual = ((Decimal('1') + tasa_periodo) ** Decimal(periodos_anuales)) - Decimal('1')
+    tasa_anual = ((Decimal('1') + tasa_periodo) ** Decimal(str(periodos_anuales))) - Decimal('1')
 
     return (
         total_pagado.quantize(Decimal("0.01")),
