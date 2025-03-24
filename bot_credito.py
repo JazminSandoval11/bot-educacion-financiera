@@ -41,10 +41,6 @@ def calcular_pago_fijo_excel(monto, tasa, plazo):
 # Cálculo del ahorro con abonos extra
 # =========================================
 def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
-    """
-    Calcula cuánto te ahorras en intereses si realizas abonos extra
-    a partir de cierto periodo.
-    """
     P = Decimal(str(monto))
     r = Decimal(str(tasa))
     n = int(plazo)
@@ -57,31 +53,33 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
     intereses_totales = Decimal('0.00')
     pagos_realizados = 0
     ultimo_pago = Decimal('0.00')
+    total_con_abonos = Decimal('0.00')  # ✅ Acumular aquí
 
     while saldo > 0:
-        # Se separa para evitar error de sintaxis
         interes = saldo * r
         abono_a_capital = pago_fijo - interes
 
-        # Si ya toca aplicar el abono extra
         if periodo >= desde:
             abono_a_capital += abono
+            total_pago_periodo = pago_fijo + abono
+        else:
+            total_pago_periodo = pago_fijo
 
-        # Si el abono a capital cubre todo el saldo, se calcula el último pago
         if abono_a_capital >= saldo:
             interes_final = saldo * r
             ultimo_pago = saldo + interes_final
             intereses_totales += interes_final
+            total_con_abonos += ultimo_pago  # ✅ último pago ajustado
             pagos_realizados += 1
             break
 
         saldo -= abono_a_capital
         intereses_totales += interes
+        total_con_abonos += total_pago_periodo  # ✅ Sumar pago total de ese periodo
         pagos_realizados += 1
         periodo += 1
 
     total_sin_abonos = pago_fijo * n
-    total_con_abonos = (pago_fijo * (pagos_realizados - 1)) + ultimo_pago
     ahorro_total = total_sin_abonos - total_con_abonos
     pagos_ahorrados = n - pagos_realizados
 
