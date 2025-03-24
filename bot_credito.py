@@ -112,9 +112,24 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
 # (Recibe "periodos_anuales" para la tasa anual)
 # =========================================
 def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, periodos_anuales):
+    """
+    Calcula el costo real de una compra a crédito con pagos fijos.
+
+    Args:
+        precio_contado (float): Precio de contado del producto.
+        pago_periodico (float): Monto del pago periódico (por semana, quincena, mes, etc.).
+        num_pagos (int): Número total de pagos.
+        periodos_anuales (int): Cuántos periodos hay en un año (12 si es mensual, 24 si es quincenal, etc.).
+
+    Returns:
+        tuple: (total_pagado, intereses, tasa_por_periodo_en_%, tasa_anual_equivalente_en_%)
+    """
     precio = Decimal(str(precio_contado))
     cuota = Decimal(str(pago_periodico))
     n = int(num_pagos)
+
+    if precio <= 0 or cuota <= 0 or n <= 0 or periodos_anuales <= 0:
+        raise ValueError("Todos los valores deben ser mayores a cero")
 
     saldo = precio
     r_estimada = Decimal('0.05')
@@ -133,7 +148,6 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
     total_pagado = cuota * n
     intereses = total_pagado - precio
 
-    # En lugar de 12, usamos los periodos_anuales
     tasa_anual = ((Decimal('1') + tasa_periodo) ** Decimal(periodos_anuales)) - Decimal('1')
 
     return (
