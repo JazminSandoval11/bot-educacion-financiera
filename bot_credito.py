@@ -99,7 +99,7 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
         intereses = total_pagado - precio
 
         # Cálculo directo de la tasa de interés por periodo:
-        razon_total = intereses / precio
+        razon_total = total_pagado / precio
         raiz_n = razon_total ** (Decimal("1") / n)
         tasa_periodo = raiz_n - Decimal("1")
 
