@@ -12,6 +12,11 @@ from math import log
 app = Flask(__name__)
 getcontext().prec = 17  # Precisión tipo Excel
 
+# Ruta para validar que el sitio está activo (solución para Meta)
+@app.route('/')
+def index():
+    return 'Bot Educación financiera para el Mundo activo'
+
 estado_usuario = {}
 
 # =========================================
