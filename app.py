@@ -137,9 +137,6 @@ saludo_inicial = (
     "8️⃣ Entender el Buró de Crédito"
 )
 
-app = Flask(__name__)
-estado_usuario = {}
-
 def enviar_mensaje(numero, texto):
     print(f"[Enviar a {numero}]: {texto}")
 
