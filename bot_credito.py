@@ -1,10 +1,10 @@
 # =========================================
 # Bot de WhatsApp: Educación Financiera para el Mundo
-# Autora: Dra. Jazmín Sandoval
+# Autora: Jazmín Sandoval
 # Descripción: Bot educativo para temas de crédito
 # =========================================
 
-from flask import Flask, request
+from flask import Flask, request, render_template
 import json
 from decimal import Decimal, getcontext
 from math import log
@@ -12,10 +12,10 @@ from math import log
 app = Flask(__name__)
 getcontext().prec = 17  # Precisión tipo Excel
 
-# Ruta para validar que el sitio está activo (solución para Meta)
+# Ruta para validar que el sitio está activo (solución para Meta y og:image)
 @app.route('/')
 def index():
-    return 'Bot Educación financiera para el Mundo activo'
+    return render_template('index.html')
 
 estado_usuario = {}
 
