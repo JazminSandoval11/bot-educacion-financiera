@@ -729,6 +729,9 @@ def webhook():
 
         respuesta = procesar_mensaje(mensaje, numero)
         enviar_mensaje(numero, respuesta)
-        return "ok", 200
 
-    # Forzar redeploy para Render
+        # 🚨 Esta parte es NUEVA: mostramos la respuesta como JSON en Postman
+        return {
+            "status": "success",
+            "respuesta_bot": respuesta
+        }, 200
