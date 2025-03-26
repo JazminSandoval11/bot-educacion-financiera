@@ -93,7 +93,7 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
 from decimal import Decimal, getcontext
 import numpy_financial as np
 
-getcontext().prec = 17  # Precisión similar a Excel
+getcontext().prec = 17  # Precisión tipo Excel
 
 def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, periodos_anuales):
     try:
@@ -108,7 +108,7 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
         total_pagado = cuota * n
         intereses = total_pagado - precio
 
-        # Cálculo de TIR con numpy (tasa efectiva por periodo)
+        # Cálculo de TIR (tasa efectiva por periodo)
         flujos = [-float(precio)] + [float(cuota)] * n
         tir = np.irr(flujos)
 
@@ -119,18 +119,25 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
         tasa_anual = (Decimal("1") + tasa_periodo) ** Decimal(p) - Decimal("1")
         porcentaje_intereses = (intereses / precio) * Decimal("100")
 
-        return f"""
-📌 Resultados de tu compra a pagos fijos:
+        # Redondeo final
+        total_pagado = total_pagado.quantize(Decimal("0.01"))
+        intereses = intereses.quantize(Decimal("0.01"))
+        porcentaje_intereses = porcentaje_intereses.quantize(Decimal("0.01"))
+        tasa_periodo = (tasa_periodo * 100).quantize(Decimal("0.01"))
+        tasa_anual = (tasa_anual * 100).quantize(Decimal("0.01"))
 
-💰 Precio de contado: ${precio}
-💸 Total pagado en pagos: ${total_pagado.quantize(Decimal("0.01"))}
-📊 Intereses pagados: ${intereses.quantize(Decimal("0.01"))} (equivale a {porcentaje_intereses.quantize(Decimal("0.01"))}% del precio)
-📈 Tasa por periodo: {(tasa_periodo * 100).quantize(Decimal("0.01"))}%
-📆 Tasa anual equivalente compuesta: {(tasa_anual * 100).quantize(Decimal("0.01"))}%
-
-🔍 *Nota sobre la tasa anual compuesta:* Esta tasa refleja el costo real acumulado del crédito a lo largo de un año si el interés se aplicara de forma compuesta. 
-No significa que pagarás ese porcentaje exacto en intereses, pero sí te ayuda a comparar el crédito con otros que usan tasas anuales.
-""".strip()
+        return (
+            f"📌 Resultados de tu compra a pagos fijos:\n"
+            f"💰 Precio de contado: ${precio}\n"
+            f"📆 Pagos fijos de ${cuota} durante {n} periodos.\n\n"
+            f"💸 Total pagado: ${total_pagado}\n"
+            f"🧮 Intereses pagados: ${intereses} (equivale al {porcentaje_intereses}% del precio de contado)\n"
+            f"📈 Tasa por periodo: {tasa_periodo}%\n"
+            f"📅 Tasa anual equivalente (basado en {p} periodos al año): {tasa_anual}%\n\n"
+            "🔍 *Nota:* La tasa anual equivalente muestra cuánto crecería tu deuda si el interés se aplicara de forma compuesta todo el año. "
+            "No significa que pagarás ese porcentaje exacto en dinero, pero sí te ayuda a comparar distintos créditos.\n\n"
+            "Escribe *menú* para volver al inicio."
+        )
 
     except Exception as e:
         return f"❌ Error al calcular: {e}"
@@ -745,7 +752,7 @@ def webhook():
         respuesta = procesar_mensaje(mensaje, numero)
         enviar_mensaje(numero, respuesta)
 
-        # 🚨 Esta parte es NUEVA: mostramos la respuesta como JSON en Postman
+        # 🚨 Mostramos la respuesta como JSON en Postman
         return {
             "status": "success",
             "respuesta_bot": respuesta
