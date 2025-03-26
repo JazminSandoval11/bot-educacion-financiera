@@ -91,7 +91,7 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
 # Costo real de compras a pagos fijos
 # =========================================
 from decimal import Decimal, getcontext
-import numpy as np
+import numpy_financial as np
 
 getcontext().prec = 17  # Precisión similar a Excel
 
