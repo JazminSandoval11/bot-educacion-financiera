@@ -128,7 +128,8 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
 📈 Tasa por periodo: {(tasa_periodo * 100).quantize(Decimal("0.01"))}%
 📆 Tasa anual equivalente compuesta: {(tasa_anual * 100).quantize(Decimal("0.01"))}%
 
-🔍 *La tasa anual compuesta muestra cuánto crecería tu deuda si ese interés se aplicara todo el año con acumulación. No significa que pagarás ese porcentaje adicional exacto en dinero.*
+🔍 *Nota sobre la tasa anual compuesta:* Esta tasa refleja el costo real acumulado del crédito a lo largo de un año si el interés se aplicara de forma compuesta. 
+No significa que pagarás ese porcentaje exacto en intereses, pero sí te ayuda a comparar el crédito con otros que usan tasas anuales.
 """.strip()
 
     except Exception as e:
