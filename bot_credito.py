@@ -90,6 +90,11 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
 # =========================================
 # Costo real de compras a pagos fijos
 # =========================================
+from decimal import Decimal, getcontext
+import numpy as np
+
+getcontext().prec = 17  # Precisión similar a Excel
+
 def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, periodos_anuales):
     try:
         precio = Decimal(str(precio_contado))
@@ -103,12 +108,14 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
         total_pagado = cuota * n
         intereses = total_pagado - precio
 
-        # Cálculo directo de la tasa de interés por periodo:
-        razon_total = total_pagado / precio
-        raiz_n = razon_total ** (Decimal("1") / n)
-        tasa_periodo = raiz_n - Decimal("1")
+        # Usamos numpy para calcular la TIR basada en los flujos
+        flujos = [-float(precio)] + [float(cuota)] * n
+        tir = np.irr(flujos)
 
-        # Cálculo de la tasa anual equivalente:
+        if tir is None or tir <= -1:
+            raise ValueError("No se pudo calcular la TIR correctamente.")
+
+        tasa_periodo = Decimal(tir)
         tasa_anual = (Decimal("1") + tasa_periodo) ** Decimal(p) - Decimal("1")
 
         return (
@@ -117,6 +124,7 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
             (tasa_periodo * 100).quantize(Decimal("0.01")),
             (tasa_anual * 100).quantize(Decimal("0.01"))
         )
+
     except Exception as e:
         raise ValueError(f"Error al calcular: {e}")
 # =========================================
