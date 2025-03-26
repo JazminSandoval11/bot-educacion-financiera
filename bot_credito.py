@@ -108,7 +108,7 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
         total_pagado = cuota * n
         intereses = total_pagado - precio
 
-        # Usamos numpy para calcular la TIR basada en los flujos
+        # Cálculo de TIR con numpy (tasa efectiva por periodo)
         flujos = [-float(precio)] + [float(cuota)] * n
         tir = np.irr(flujos)
 
@@ -117,16 +117,22 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
 
         tasa_periodo = Decimal(tir)
         tasa_anual = (Decimal("1") + tasa_periodo) ** Decimal(p) - Decimal("1")
+        porcentaje_intereses = (intereses / precio) * Decimal("100")
 
-        return (
-            total_pagado.quantize(Decimal("0.01")),
-            intereses.quantize(Decimal("0.01")),
-            (tasa_periodo * 100).quantize(Decimal("0.01")),
-            (tasa_anual * 100).quantize(Decimal("0.01"))
-        )
+        return f"""
+📌 Resultados de tu compra a pagos fijos:
+
+💰 Precio de contado: ${precio}
+💸 Total pagado en pagos: ${total_pagado.quantize(Decimal("0.01"))}
+📊 Intereses pagados: ${intereses.quantize(Decimal("0.01"))} (equivale a {porcentaje_intereses.quantize(Decimal("0.01"))}% del precio)
+📈 Tasa por periodo: {(tasa_periodo * 100).quantize(Decimal("0.01"))}%
+📆 Tasa anual equivalente compuesta: {(tasa_anual * 100).quantize(Decimal("0.01"))}%
+
+🔍 *La tasa anual compuesta muestra cuánto crecería tu deuda si ese interés se aplicara todo el año con acumulación. No significa que pagarás ese porcentaje adicional exacto en dinero.*
+""".strip()
 
     except Exception as e:
-        raise ValueError(f"Error al calcular: {e}")
+        return f"❌ Error al calcular: {e}"
 # =========================================
 # Menú principal
 # =========================================
