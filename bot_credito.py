@@ -502,7 +502,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Ocurrió un error. Indica cuántos pagos totales harás (ejemplo: 24)."
 
-        # SEGUNDO PASO: usuario indica periodos anuales
+# SEGUNDO PASO: usuario indica periodos anuales
 if contexto["esperando"] == "pedir_periodos_anuales_tienda":
     try:
         periodos_anuales = int(mensaje.strip())
