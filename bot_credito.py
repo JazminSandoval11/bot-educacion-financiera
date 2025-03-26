@@ -482,7 +482,7 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Cantidad inválida. Intenta con un número."
 
-        # PRIMER PASO: guardamos num_pagos y pedimos periodos anuales
+       # PRIMER PASO: guardamos num_pagos y pedimos periodos anuales
         if contexto["esperando"] == "numero_pagos_tienda":
             try:
                 # Convertimos la entrada a entero
@@ -502,25 +502,25 @@ def procesar_mensaje(mensaje, numero):
             except:
                 return "Ocurrió un error. Indica cuántos pagos totales harás (ejemplo: 24)."
 
-# SEGUNDO PASO: usuario indica periodos anuales
-if contexto["esperando"] == "pedir_periodos_anuales_tienda":
-    try:
-        periodos_anuales = int(mensaje.strip())
-        contexto["periodos_anuales"] = periodos_anuales  # ✅ Se guarda en el contexto
+        # SEGUNDO PASO: usuario indica periodos anuales
+        if contexto["esperando"] == "pedir_periodos_anuales_tienda":
+            try:
+                periodos_anuales = int(mensaje.strip())
+                contexto["periodos_anuales"] = periodos_anuales  # ✅ Se guarda en el contexto
 
-        mensaje_resultado = calcular_costo_credito_tienda(
-            contexto["precio_contado"],
-            contexto["pago_fijo_tienda"],
-            contexto["numero_pagos_tienda"],
-            periodos_anuales
-        )
+                mensaje_resultado = calcular_costo_credito_tienda(
+                    contexto["precio_contado"],
+                    contexto["pago_fijo_tienda"],
+                    contexto["numero_pagos_tienda"],
+                    periodos_anuales
+                )
 
-        estado_usuario.pop(numero)
-        return mensaje_resultado
+                estado_usuario.pop(numero)
+                return mensaje_resultado
 
-    except Exception as e:
-        print(f"Error al calcular tasa anual: {e}")
-        return "Ocurrió un error. Asegúrate de indicar cuántos periodos hay en un año con un número (ej: 24)."
+            except Exception as e:
+                print(f"Error al calcular tasa anual: {e}")
+                return "Ocurrió un error. Asegúrate de indicar cuántos periodos hay en un año con un número (ej: 24)."
 
 
         # Opción 4 (capacidad de pago)
