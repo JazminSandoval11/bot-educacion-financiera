@@ -14,7 +14,7 @@ app = Flask(__name__)
 getcontext().prec = 17  # Precisión tipo Excel
 
 # Token y ID reales para envío de mensajes
-TOKEN = 'arrocito2024'
+TOKEN = 'EAAQjTvf8jlUBO7ZAG271oU9tJBQ4uMYZCZAzlrL2MEwl5O2fFfXfdI3VzHWg7qzKZCadypVBcGE5o2jm9nuPigg17wzUSwMbLDz1MuQZAZCG3uDYjQbNuXnvQ5tvxhEJQkUKcLMgukkyRHnKFWD9N4BIipJYuAk8zvYEZC4JqenUqZCzbro11JMkyWyzZAfU6zcwHKmKLGdb50G8ZBtyatPjn8sSPzcZBJWZCaNm2ukrgaoD'
 PHONE_NUMBER_ID = '599731556557014'  # ID del número de prueba de Meta
 
 # Ruta para validar que el sitio está activo (solución para Meta y og:image)
