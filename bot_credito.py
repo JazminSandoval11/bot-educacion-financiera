@@ -8,9 +8,14 @@ from flask import Flask, request, render_template
 import json
 from decimal import Decimal, getcontext
 from math import log
+import requests  # <-- AÑADIDO
 
 app = Flask(__name__)
 getcontext().prec = 17  # Precisión tipo Excel
+
+# Token y ID reales para envío de mensajes
+TOKEN = 'arrocito2024'
+PHONE_NUMBER_ID = '599731556557014'  # ID del número de prueba de Meta
 
 # Ruta para validar que el sitio está activo (solución para Meta y og:image)
 @app.route('/')
@@ -161,6 +166,25 @@ saludo_inicial = (
 
 def enviar_mensaje(numero, texto):
     print(f"[Enviar a {numero}]: {texto}")
+    url = f"https://graph.facebook.com/v17.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {
+            "body": texto
+        }
+    }
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        print(response.status_code)
+        print(response.text)
+    except Exception as e:
+        print("❌ Error al enviar mensaje:", e)
 
 def procesar_mensaje(mensaje, numero):
     texto_limpio = mensaje.strip().lower()
