@@ -13,8 +13,7 @@ import requests  # <-- AÑADIDO
 app = Flask(__name__)
 getcontext().prec = 17  # Precisión tipo Excel
 
-# Token y ID reales para envío de mensajes
-TOKEN = 'EAAQjTvf8jlUBO7ZAG271oU9tJBQ4uMYZCZAzlrL2MEwl5O2fFfXfdI3VzHWg7qzKZCadypVBcGE5o2jm9nuPigg17wzUSwMbLDz1MuQZAZCG3uDYjQbNuXnvQ5tvxhEJQkUKcLMgukkyRHnKFWD9N4BIipJYuAk8zvYEZC4JqenUqZCzbro11JMkyWyzZAfU6zcwHKmKLGdb50G8ZBtyatPjn8sSPzcZBJWZCaNm2ukrgaoD'
+# Token y ID reales para envío de EAAQjTvf8jlUBOyVZC7Ue8XZCbR7hZBwGCRqz9ZA8HrDaSf8MFDJogPk5YWPYDTgQoY7B5pqT9mIPboY1AGnzDiuKugwEPKeZAmeeuAVyvkSWasXaJEwyYhJulCVsaoA6IfdCgQ5d0Bqd0N9Xx5bp5yVeMRddHtPArUT8wlz3CYPKANwigwDTaISmymDRZARtOKBSTZCD6ZBkoXrsb8zZCZAOTIZBQWZAoz3WaoSwY9hNYx5ZB'
 PHONE_NUMBER_ID = '599731556557014'  # ID del número de prueba de Meta
 
 # Ruta para validar que el sitio está activo (solución para Meta y og:image)
