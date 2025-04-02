@@ -474,20 +474,20 @@ def procesar_mensaje(mensaje, numero):
                     f"💰 Pagarías en total: ${total_pagado.quantize(Decimal('0.01'))}\n"
                     f"📉 De los cuales ${intereses.quantize(Decimal('0.01'))} serían intereses.\n\n"
                     "¿Te gustaría ver cuánto podrías ahorrar si haces pagos extra a capital?\n"
-                    "Responde *si* o *no*."
+                    "Responde *sí* o *no*."
                 )
             except:
                 return "Por favor escribe la tasa como un número decimal. Ejemplo: 0.025"
 
         if contexto["esperando"] == "ver_si_abonos1":
-            if texto_limpio == "si":
+            if texto_limpio in ["si", "sí"]:
                 contexto["esperando"] = "abono_extra1"
                 return "¿Cuánto deseas abonar extra por periodo? (Ejemplo: 500)"
             elif texto_limpio == "no":
                 estado_usuario.pop(numero)
                 return "Ok, regresamos al inicio. Escribe *menú* si deseas ver otras opciones."
             else:
-                return "Por favor, responde *si* o *no*."
+                return "Por favor, responde *sí* o *no*."
 
         if contexto["esperando"] == "abono_extra1":
             try:
@@ -740,7 +740,7 @@ def procesar_mensaje(mensaje, numero):
 
         # Submenú Buró
         if contexto["esperando"] == "submenu_buro":
-            if texto_limpio == "si":
+            if texto_limpio in ["si", "sí"]:
                 estado_usuario.pop(numero)
                 return (
                     "¿Cómo mejorar mi historial crediticio?\n"
