@@ -15,7 +15,7 @@ getcontext().prec = 17  # Precisión tipo Excel
 
 # Token y ID reales para envío de mensajes
 TOKEN = 'EAAQjTvf8jlUBOxDp7N2CbiQFZC6i8hwwPHZAruIZAobVYWi1VNDQWG0eSfNFqZBShgELOLEJ3k21PR2lkBjQolFBsoo74at3G2QuJuNgkJaqwRVQxQ9TcAjomt1bCR76o942XhdDUvmQWz71plZCRfK1CZCpehsc3VxYpgIpFJoyYp0WlS2XGr59Po7feDWlUwwdGZCicdvN1FZCCZCjf5gRe1BLZCg4udN1Kzu2S3ecGI'
-PHONE_NUMBER_ID = '652904977899177'  # ID del número de prueba de Meta
+PHONE_NUMBER_ID = '599731556557014'  # ID del número de prueba de Meta
 
 # Ruta para validar que el sitio está activo (solución para Meta y og:image)
 @app.route('/')
