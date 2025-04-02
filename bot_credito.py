@@ -785,16 +785,19 @@ def webhook():
 
     if request.method == "POST":
         data = request.get_json()
+        print("📩 Webhook recibido:")
+        print(json.dumps(data, indent=2))  # 👈 muestra todo bonito en logs
+
         try:
             mensaje = data['entry'][0]['changes'][0]['value']['messages'][0]['text']['body']
             numero = data['entry'][0]['changes'][0]['value']['messages'][0]['from']
-        except:
+        except Exception as e:
+            print("⚠️ No se pudo procesar el mensaje:", e)
             return "ok", 200
 
         respuesta = procesar_mensaje(mensaje, numero)
         enviar_mensaje(numero, respuesta)
 
-        # 🚨 Mostramos la respuesta como JSON en Postman
         return {
             "status": "success",
             "respuesta_bot": respuesta
