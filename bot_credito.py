@@ -471,8 +471,8 @@ def procesar_mensaje(mensaje, numero):
 
                 return (
                     f"✅ Tu pago por periodo sería de: ${pago:,.2f}\n"
-                    f"💰 Pagarías en total: ${total_pagado.quantize(Decimal('0.01'))}\n"
-                    f"📉 De los cuales ${intereses.quantize(Decimal('0.01'))} serían intereses.\n\n"
+                    f"💰 Pagarías en total: ${float(total_pagado):,.2f}\n"
+                    f"📉 De los cuales ${float(intereses):,.2f} serían intereses.\n\n"
                     "¿Te gustaría ver cuánto podrías ahorrar si haces pagos extra a capital?\n"
                     "Responde *sí* o *no*."
                 )
