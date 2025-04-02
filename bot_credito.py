@@ -161,7 +161,7 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
         return (
             f"📌 Resultados de tu compra a pagos fijos:\n"
             f"💰 Precio de contado: ${precio:,.2f}\n"
-            f"📆 Pagos fijos de ${cuota} durante {n} periodos.\n\n"
+            f"📆 Pagos fijos de ${cuota:,.2f} durante {n} periodos.\n\n"
             f"💸 Total pagado: ${total_pagado:,.2f}\n"
             f"🧮 Intereses pagados: ${intereses:,.2f} (equivale al {porcentaje_intereses}% del precio de contado)\n"
             f"📈 Tasa por periodo: {tasa_periodo}%\n"
