@@ -506,11 +506,11 @@ def procesar_mensaje(mensaje, numero):
                 )
                 estado_usuario.pop(numero)
                 return (
-                    f"💸 Si pagaras este crédito sin hacer abonos extra, terminarías pagando ${total_sin} en total.\n\n"
-                    f"Pero si decides abonar ${contexto['abono']} adicionales por periodo desde el periodo {desde}...\n"
+                    f"💸 Si pagaras este crédito sin hacer abonos extra, terminarías pagando ${float(total_sin):,.2f} en total.\n\n"
+                    f"Pero si decides abonar ${float(contexto['abono']):,.2f} adicionales por periodo desde el periodo {desde}...\n"
                     f"✅ Terminarías de pagar en menos tiempo (¡te ahorras {pagos_menos} pagos!)\n"
-                    f"💰 Pagarías ${total_con} en total\n"
-                    f"🧮 Y te ahorrarías ${ahorro} solo en intereses.\n\n"
+                    f"💰 Pagarías ${float(total_con):,.2f} en total\n"
+                    f"🧮 Y te ahorrarías ${float(ahorro):,.2f} solo en intereses.\n\n"
                     "Escribe *menú* para volver al inicio."
                 )
             except:
