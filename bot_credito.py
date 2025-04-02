@@ -160,10 +160,10 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
 
         return (
             f"📌 Resultados de tu compra a pagos fijos:\n"
-            f"💰 Precio de contado: ${precio}\n"
+            f"💰 Precio de contado: ${precio:,.2f}\n"
             f"📆 Pagos fijos de ${cuota} durante {n} periodos.\n\n"
-            f"💸 Total pagado: ${total_pagado}\n"
-            f"🧮 Intereses pagados: ${intereses} (equivale al {porcentaje_intereses}% del precio de contado)\n"
+            f"💸 Total pagado: ${total_pagado:,.2f}\n"
+            f"🧮 Intereses pagados: ${intereses:,.2f} (equivale al {porcentaje_intereses}% del precio de contado)\n"
             f"📈 Tasa por periodo: {tasa_periodo}%\n"
             f"📅 Tasa anual equivalente (basado en {p} periodos al año): {tasa_anual}%\n\n"
             "🔍 *Nota:* La tasa anual equivalente muestra cuánto crecería tu deuda si el interés se aplicara de forma compuesta todo el año. "
@@ -402,7 +402,7 @@ def procesar_mensaje(mensaje, numero):
                 contexto["esperando"] = "abono_extra2"
 
                 return (
-                    f"✅ Tu pago por periodo sería de: ${pago}\n"
+                    f"✅ Tu pago por periodo sería de: ${pago:,.2f}\n"
                     f"💰 Pagarías en total: ${total_pagado.quantize(Decimal('0.01'))}\n"
                     f"📉 De los cuales ${intereses.quantize(Decimal('0.01'))} serían intereses.\n\n"
                     "¿Cuánto deseas abonar extra por periodo? (Ejemplo: 500)"
