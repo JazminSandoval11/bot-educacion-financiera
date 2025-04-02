@@ -403,8 +403,8 @@ def procesar_mensaje(mensaje, numero):
 
                 return (
                     f"✅ Tu pago por periodo sería de: ${pago:,.2f}\n"
-                    f"💰 Pagarías en total: ${total_pagado.quantize(Decimal('0.01'))}\n"
-                    f"📉 De los cuales ${intereses.quantize(Decimal('0.01'))} serían intereses.\n\n"
+                    f"💰 Pagarías en total: ${float(total_pagado):,.2f}\n"
+                    f"📉 De los cuales ${float(intereses):,.2f} serían intereses.\n\n"
                     "¿Cuánto deseas abonar extra por periodo? (Ejemplo: 500)"
                 )
             except:
@@ -427,11 +427,11 @@ def procesar_mensaje(mensaje, numero):
                 )
                 estado_usuario.pop(numero)
                 return (
-                    f"💸 Si pagaras este crédito sin hacer abonos extra, terminarías pagando ${total_sin} en total.\n\n"
-                    f"Pero si decides abonar ${contexto['abono']} adicionales por periodo desde el periodo {desde}...\n"
+                    f"💸 Si pagaras este crédito sin hacer abonos extra, terminarías pagando ${float(total_sin_abonos):,.2f} en total.\n"
+                    f"Pero si decides abonar ${float(abono_extra):,.2f} adicionales por periodo desde el periodo {inicio_abono}...\n"
                     f"✅ Terminarías de pagar en menos tiempo (¡te ahorras {pagos_menos} pagos!)\n"
-                    f"💰 Pagarías ${total_con} en total\n"
-                    f"🧮 Y te ahorrarías ${ahorro} solo en intereses.\n\n"
+                    f"💰 Pagarías ${float(total_con_abonos):,.2f} en total\n"
+                    f"🧮 Y te ahorrarías ${float(intereses_ahorrados):,.2f} solo en intereses.\n\n"
                     "Escribe *menú* para volver al inicio."
                 )
             except:
@@ -470,7 +470,7 @@ def procesar_mensaje(mensaje, numero):
                 contexto["esperando"] = "ver_si_abonos1"
 
                 return (
-                    f"✅ Tu pago por periodo sería de: ${pago}\n"
+                    f"✅ Tu pago por periodo sería de: ${pago:,.2f}\n"
                     f"💰 Pagarías en total: ${total_pagado.quantize(Decimal('0.01'))}\n"
                     f"📉 De los cuales ${intereses.quantize(Decimal('0.01'))} serían intereses.\n\n"
                     "¿Te gustaría ver cuánto podrías ahorrar si haces pagos extra a capital?\n"
@@ -628,7 +628,7 @@ def procesar_mensaje(mensaje, numero):
             contexto["esperando"] = "subopcion_prestamo"
 
             return (
-                f"✅ Según tus datos, podrías pagar hasta ${capacidad_mensual} al mes en un nuevo crédito.\n\n"
+                f"✅ Según tus datos, podrías pagar hasta ${capacidad_mensual:,.2f} al mes en un nuevo crédito.\n\n"
                 "¿Qué te gustaría hacer ahora?\n"
                 "1. Calcular el monto máximo de crédito que podrías solicitar\n"
                 "2. Validar si un crédito que te interesa podría ser aprobado\n"
@@ -670,7 +670,7 @@ def procesar_mensaje(mensaje, numero):
                 contexto["esperando"] = "submenu_despues_de_maximo"
 
                 return (
-                    f"✅ Con base en tu capacidad de pago de ${capacidad}, podrías aspirar a un crédito de hasta ${monto_maximo}.\n\n"
+                    f"✅ Con base en tu capacidad de pago de ${capacidad:,.2f}, podrías aspirar a un crédito de hasta ${monto_maximo:,.2f}.\n\n"
                     "¿Te gustaría ahora validar un crédito específico o volver al menú?\n"
                     "1. Validar un crédito\n"
                     "2. Regresar al menú\n"
@@ -718,7 +718,7 @@ def procesar_mensaje(mensaje, numero):
                     estado_usuario.pop(numero)
                     return (
                         f"✅ Puedes pagar este crédito sin problemas.\n"
-                        f"Tu pago mensual estimado es ${pago_estimado}, dentro de tu capacidad (${capacidad}).\n"
+                        f"Tu pago mensual estimado es ${pago_estimado:,.2f}, dentro de tu capacidad (${capacidad:,.2f}).\n"
                         "Escribe *menú* para volver."
                     )
                 else:
@@ -728,11 +728,11 @@ def procesar_mensaje(mensaje, numero):
                     estado_usuario.pop(numero)
                     return (
                         f"❌ No podrías pagar este crédito.\n"
-                        f"Pago mensual: ${pago_estimado} > tu capacidad: ${capacidad}.\n\n"
+                        f"Pago mensual: ${pago_estimado:,.2f} > tu capacidad: ${capacidad:,.2f}.\n\n"
                         "🔧 Opciones:\n"
-                        f"1. Reducir pagos fijos en al menos ${diferencia}.\n"
-                        f"2. Aumentar ingresos en ~${incremento_ingreso}.\n"
-                        f"3. Reducir deudas revolventes en ~${reduccion_revolvente}.\n\n"
+                        f"1. Reducir pagos fijos en al menos ${diferencia:,.2f}.\n"
+                        f"2. Aumentar ingresos en ~${incremento_ingreso:,.2f}.\n"
+                        f"3. Reducir deudas revolventes en ~${reduccion_revolvente:,.2f}.\n\n"
                         "Escribe *menú* para volver."
                     )
             except:
