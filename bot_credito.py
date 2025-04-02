@@ -14,7 +14,7 @@ app = Flask(__name__)
 getcontext().prec = 17  # Precisión tipo Excel
 
 # Token y ID reales para envío de mensajes
-TOKEN = 'EAAQjTvf8jlUBOZBYgrJ3yJMVUIcW3VbBnWtvhy1xvu8WsK9p05qGnTzE2iLQbAOYBSA772LigLZBYRPxULZCe5XICCgmZByJZCqLJQl6FdZBJTh214AyZB63ZBJqucNvh57WW2BlR9H8XIOXBbVkPdoh3ZBXdq1orWtWseBf2lcsiPTVIQIrhPSnLl4Si1mQiqdraib1o0vUJipEIB8DZC4oZCuXi7WAT27DaSP9bDlisQX'
+TOKEN = 'EAAQjTvf8jlUBOxDp7N2CbiQFZC6i8hwwPHZAruIZAobVYWi1VNDQWG0eSfNFqZBShgELOLEJ3k21PR2lkBjQolFBsoo74at3G2QuJuNgkJaqwRVQxQ9TcAjomt1bCR76o942XhdDUvmQWz71plZCRfK1CZCpehsc3VxYpgIpFJoyYp0WlS2XGr59Po7feDWlUwwdGZCicdvN1FZCCZCjf5gRe1BLZCg4udN1Kzu2S3ecGI'
 PHONE_NUMBER_ID = '599731556557014'  # ID del número de prueba de Meta
 
 # Ruta para validar que el sitio está activo (solución para Meta y og:image)
@@ -23,6 +23,33 @@ def index():
     return render_template('index.html')
 
 estado_usuario = {}
+
+# =========================================
+# Función para enviar mensajes a WhatsApp
+# =========================================
+def enviar_mensaje(numero, texto):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "text",
+        "text": {
+            "body": texto
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+
+    if response.status_code == 200:
+        print(f"✅ Mensaje enviado a {numero}")
+    else:
+        print(f"❌ Error al enviar mensaje a {numero}")
+        print(response.status_code)
+        print(response.text)
 
 # =========================================
 # Cálculo de pago fijo (tipo Excel)
