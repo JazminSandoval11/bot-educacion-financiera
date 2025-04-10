@@ -780,7 +780,7 @@ def webhook():
         verify_token = request.args.get("hub.verify_token")
         challenge = request.args.get("hub.challenge")
         if verify_token == "arrocito2024":
-            return challenge
+            return challenge, 200
         return "Token inválido", 403
 
     if request.method == "POST":
