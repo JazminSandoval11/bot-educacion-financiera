@@ -289,40 +289,41 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
 # Menú principal
 # =========================================
 saludo_inicial = (
-    "👋 Hola 😊, soy tu asistente virtual de Educación Financiera para el Mundo, un proyecto de la "
-    "Facultad de Ciencias Administrativas de la Universidad Autónoma de Baja California (UABC).\n"
-    "Estoy aquí para ayudarte a comprender mejor cómo funcionan los créditos y tomar decisiones informadas 💳📊\n\n"
-    "¿Sobre qué aspecto del crédito necesitas ayuda hoy?\n"
-    "Escríbeme el número o el nombre de alguna de estas opciones para empezar:\n\n"
+    "👋 Hola 😊 Soy tu asistente de Educación Financiera para el Mundo (Facultad de Ciencias "
+    "Administrativas, UABC).\n"
+    "Te ayudo a entender los créditos y tomar mejores decisiones con tu dinero 💳\n\n"
+    "Elige un número para empezar:\n\n"
     "1️⃣ Simular un crédito\n"
-    "2️⃣ Ver cuánto ahorro si doy pagos extras a un crédito\n"
-    "3️⃣ Calcular el costo real de compras a pagos fijos en tiendas departamentales\n"
+    "2️⃣ Ahorro con pagos extra\n"
+    "3️⃣ Costo real de compras a meses\n"
     "4️⃣ ¿Cuánto me pueden prestar?\n"
-    "5️⃣ Consejos para pagar un crédito sin ahogarte\n"
-    "6️⃣ Cómo identificar un crédito caro\n"
-    "7️⃣ Errores comunes al solicitar un crédito\n"
+    "5️⃣ Consejos para pagar sin ahogarte\n"
+    "6️⃣ Identificar un crédito caro\n"
+    "7️⃣ Errores comunes al pedir crédito\n"
     "8️⃣ Entender el Buró de Crédito\n"
     "9️⃣ ¿Quiénes hicimos este bot?\n\n"
-    "No te preocupes si no conoces todos estos términos — yo te voy guiando paso a paso 😊"
+    "¿No conoces estos temas? No hay problema, yo te guío 😊"
 )
 
 mensaje_creditos = (
     "👩‍🏫 ¿Quiénes hicimos este bot?\n\n"
-    "Este proyecto nace en la Facultad de Ciencias Administrativas de la Universidad Autónoma de Baja "
-    "California (UABC), con el objetivo de acercar la educación financiera a cualquier persona, tenga "
+    "Este proyecto es obra de un equipo de académicas de la Facultad de Ciencias Administrativas de "
+    "la UABC, unidas por la misión de acercar la educación financiera a cualquier persona, tenga "
     "poca o mucha experiencia previa con temas de dinero.\n"
     "________________________________________\n"
-    "✍️ Autora: Dra. Ana Jazmín Sandoval Sánchez\n"
+    "✍️ Dra. Ana Jazmín Sandoval Sánchez\n"
+    "Autora y creadora de este bot.\n"
     "________________________________________\n"
-    "🌟 Con un agradecimiento muy especial a la Dra. Sósima Carrillo, Líder del Cuerpo Académico "
-    "Gestión Financiera y Administrativa de las Organizaciones. Su mentoría y su compromiso genuino "
-    "con la educación financiera han sido una inspiración fundamental para que este proyecto exista.\n"
+    "🌟 Dra. Sósima Carrillo\n"
+    "Coautora de este proyecto, Líder del Cuerpo Académico Gestión Financiera y Administrativa de las "
+    "Organizaciones. Su mentoría y su compromiso genuino con la educación financiera han sido una "
+    "inspiración fundamental para que este proyecto exista.\n"
     "________________________________________\n"
-    "🤝 También agradecemos con todo el corazón a las Dras. Yésica Lizbet Benítez Niebla, Paulina "
-    "Villalobos Torres y Zyanya María Villa Zamorano, integrantes del Cuerpo Académico Gestión "
-    "Disruptiva, Cooperación e Inclusión en Organizaciones y Comunidades. Su entusiasmo, compromiso y "
-    "empeño en construir siempre ideas disruptivas y diferentes son parte esencial de la misión que "
-    "compartimos: contribuir, desde nuestro trabajo, a cambiar al mundo.\n"
+    "🤝 Dras. Yésica Lizbet Benítez Niebla, Paulina Villalobos Torres y Zyanya María Villa Zamorano\n"
+    "Coautoras de este proyecto, integrantes del Cuerpo Académico Gestión Disruptiva, Cooperación e "
+    "Inclusión en Organizaciones y Comunidades. Su entusiasmo, compromiso y empeño en construir "
+    "siempre ideas disruptivas y diferentes son parte esencial de la misión que compartimos: "
+    "contribuir, desde nuestro trabajo, a cambiar al mundo.\n"
     "________________________________________\n"
     "Gracias por confiar en este proyecto 💚\n"
     "Escribe *menú* para volver."
@@ -401,11 +402,11 @@ def procesar_mensaje(mensaje, numero):
             estado_usuario[numero] = {"esperando": "monto_credito"}
             return "Perfecto. Para comenzar, dime el monto del crédito que deseas simular."
 
-        if texto_limpio in ["2", "ver cuánto me ahorro si doy pagos extra al crédito"]:
+        if texto_limpio in ["2", "ahorro con pagos extra", "ver cuánto me ahorro si doy pagos extra al crédito"]:
             estado_usuario[numero] = {"esperando": "monto2"}
             return "Para estimar tu ahorro con pagos extra, primero dime el Monto del crédito."
 
-        if texto_limpio in ["3", "calcular el costo real de compras a pagos fijos en tiendas departamentales"]:
+        if texto_limpio in ["3", "costo real de compras a meses", "calcular el costo real de compras a pagos fijos en tiendas departamentales"]:
             estado_usuario[numero] = {"esperando": "precio_contado"}
             return (
                 "Vamos a calcular el costo real de una compra a pagos fijos.\n"
@@ -423,7 +424,7 @@ def procesar_mensaje(mensaje, numero):
             )
 
         # Opción 5
-        if texto_limpio in ["5", "consejos para pagar un crédito sin ahogarte"]:
+        if texto_limpio in ["5", "consejos para pagar sin ahogarte", "consejos para pagar un crédito sin ahogarte"]:
             return (
                 "🟡 Opción 5: Consejos para pagar un crédito sin ahogarte\n"
                 "Pagar un crédito no tiene que sentirse como una carga eterna. Aquí van algunos consejos sencillos para ayudarte a pagar con más tranquilidad y menos estrés:\n"
@@ -451,7 +452,7 @@ def procesar_mensaje(mensaje, numero):
             )
 
         # Opción 6
-        if texto_limpio in ["6", "cómo identificar un crédito caro"]:
+        if texto_limpio in ["6", "identificar un crédito caro", "cómo identificar un crédito caro"]:
             return (
                 "Muchas veces un crédito parece accesible… hasta que ves lo que terminas pagando. Aquí te doy algunas claves para detectar si un crédito es caro:\n\n"
                 "🔍 1. CAT (Costo Anual Total)\n"
@@ -471,7 +472,7 @@ def procesar_mensaje(mensaje, numero):
             )
 
         # Opción 7
-        if texto_limpio in ["7", "errores comunes al solicitar un crédito"]:
+        if texto_limpio in ["7", "errores comunes al pedir crédito", "errores comunes al solicitar un crédito"]:
             return (
                 "Solicitar un crédito es una gran responsabilidad. Aquí te comparto algunos errores comunes que muchas personas cometen… ¡y cómo evitarlos!\n"
                 "________________________________________\n"
