@@ -173,7 +173,20 @@ saludo_inicial = (
     "8️⃣ Entender el Buró de Crédito"
 )
  
+def normalizar_numero(numero):
+    """
+    WhatsApp reporta los números mexicanos en los webhooks entrantes con un
+    "1" extra después del 52 (ej. 521XXXXXXXXXX), pero la API espera el
+    número SIN ese 1 al enviar mensajes (ej. 52XXXXXXXXXX). Si no se quita,
+    el envío falla con el error 131030 "Recipient phone number not in
+    allowed list", aunque el número sí esté autorizado.
+    """
+    if numero.startswith("521") and len(numero) == 13:
+        return "52" + numero[3:]
+    return numero
+ 
 def enviar_mensaje(numero, texto):
+    numero = normalizar_numero(numero)
     print(f"[Enviar a {numero}]: {texto}")
     url = f"https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages"
     headers = {
