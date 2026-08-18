@@ -21,7 +21,10 @@ PHONE_NUMBER_ID = '652904977899177'  # ID del número oficial 686 6029585
 @app.route('/')
 def index():
     return render_template('index.html')
-
+# Ruta pública de la política de privacidad (requerida por Meta)
+@app.route('/privacidad')
+def privacidad():
+    return render_template('privacidad.html')
 estado_usuario = {}
 
 # =========================================
