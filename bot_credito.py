@@ -289,10 +289,10 @@ def calcular_costo_credito_tienda(precio_contado, pago_periodico, num_pagos, per
 # Menú principal
 # =========================================
 saludo_inicial = (
-    "👋 Hola 😊 Soy tu asistente de Educación Financiera para el Mundo (Facultad de Ciencias "
-    "Administrativas, UABC).\n"
-    "Te ayudo a entender los créditos y tomar mejores decisiones con tu dinero 💳\n\n"
-    "Elige un número para empezar:\n\n"
+    "👋 Hola 😊, soy tu asistente virtual de Educación Financiera para el Mundo, un proyecto de la "
+    "Facultad de Ciencias Administrativas de la Universidad Autónoma de Baja California (UABC) y "
+    "estoy aquí para ayudarte a comprender mejor el mundo de los créditos.\n\n"
+    "Escríbeme el número o el nombre de alguna de estas opciones para empezar:\n"
     "1️⃣ Simular un crédito\n"
     "2️⃣ Ahorro con pagos extra\n"
     "3️⃣ Costo real de compras a meses\n"
@@ -301,8 +301,8 @@ saludo_inicial = (
     "6️⃣ Identificar un crédito caro\n"
     "7️⃣ Errores comunes al pedir crédito\n"
     "8️⃣ Entender el Buró de Crédito\n"
-    "9️⃣ ¿Quiénes hicimos este bot?\n\n"
-    "¿No conoces estos temas? No hay problema, yo te guío 😊"
+    "9️⃣ ¿Quiénes hicimos este bot?\n"
+    "No te preocupes si no conoces todos estos términos — yo te voy guiando paso a paso 😊"
 )
 
 mensaje_creditos = (
