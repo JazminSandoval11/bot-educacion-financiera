@@ -7,9 +7,14 @@
 from flask import Flask, request, render_template
 import json
 import os
+import re
 from decimal import Decimal, getcontext, ROUND_HALF_UP
 from math import log
 import requests  # <-- AÑADIDO
+
+# Quita signos de puntuación y espacios sueltos al inicio/final de un mensaje
+# (¡Hola!, Hola., ¿menú? etc. deben reconocerse igual que "hola").
+_BORDE_PUNTUACION_RE = re.compile(r'^[\s¡!¿?.,;:()"\']+|[\s¡!¿?.,;:()"\']+$')
 
 app = Flask(__name__)
 getcontext().prec = 17  # Precisión tipo Excel
@@ -369,7 +374,7 @@ def enviar_mensaje(numero, texto):
         print("❌ Error al enviar mensaje:", e)
 
 def procesar_mensaje(mensaje, numero):
-    texto_limpio = mensaje.strip().lower()
+    texto_limpio = _BORDE_PUNTUACION_RE.sub('', mensaje).lower()
 
     # Evitar menú si estamos en pasos críticos
     subflujo_critico = False
@@ -414,7 +419,7 @@ def procesar_mensaje(mensaje, numero):
                 "1️⃣ ¿Cuál es el precio de contado del producto? (ejemplo: 1800)"
             )
 
-        if texto_limpio in ["4", "¿cuánto me pueden prestar?"]:
+        if texto_limpio in ["4", "cuánto me pueden prestar", "¿cuánto me pueden prestar?"]:
             estado_usuario[numero] = {"esperando": "ingreso"}
             return (
                 "Vamos a calcular cuánto podrías solicitar como crédito, según tu capacidad de pago.\n\n"
@@ -529,7 +534,7 @@ def procesar_mensaje(mensaje, numero):
             )
 
         # Opción 9
-        if texto_limpio in ["9", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
+        if texto_limpio in ["9", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
             return mensaje_creditos
 
     # ===========================
