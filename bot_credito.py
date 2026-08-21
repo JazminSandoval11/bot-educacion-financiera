@@ -563,10 +563,10 @@ saludo_inicial = (
     "2️⃣ Crédito\n"
     "3️⃣ Inversión\n"
     "4️⃣ Jubilación\n"
-    "5️⃣ ¿Quiénes hicimos este bot?\n"
-    "6️⃣ Glosario de términos financieros\n"
-    "7️⃣ Evalúa tu salud financiera\n"
-    "8️⃣ Género y finanzas\n"
+    "5️⃣ Género y finanzas\n"
+    "6️⃣ Evalúa tu salud financiera\n"
+    "7️⃣ Glosario de términos financieros\n"
+    "8️⃣ ¿Quiénes hicimos este bot?\n"
     "No te preocupes si no conoces todos estos términos, yo te voy guiando paso a paso 😊\n\n"
     "🔒 Este bot nunca te va a pedir contraseñas, NIP, CVV de tu tarjeta ni códigos de verificación. "
     "Si alguien más te los pide haciéndose pasar por este bot, no se los compartas."
@@ -872,17 +872,14 @@ def _formatear_pregunta_salud(dim, idx, primera):
     total = len(dim["preguntas"])
     encabezado = f"{dim['emoji']} *{dim['nombre']}*, pregunta {idx + 1} de {total}"
     cuerpo = dim["preguntas"][idx]
-    if primera:
-        escala = (
-            "Responde cada afirmación con un número del 1 al 5:\n"
-            "1️⃣ Completamente en desacuerdo\n"
-            "2️⃣ En desacuerdo\n"
-            "3️⃣ Ni de acuerdo ni en desacuerdo\n"
-            "4️⃣ De acuerdo\n"
-            "5️⃣ Completamente de acuerdo"
-        )
-    else:
-        escala = "Responde del 1 (completamente en desacuerdo) al 5 (completamente de acuerdo)."
+    escala = (
+        "Responde cada afirmación con un número del 1 al 5:\n"
+        "1️⃣ Completamente en desacuerdo\n"
+        "2️⃣ En desacuerdo\n"
+        "3️⃣ Ni de acuerdo ni en desacuerdo\n"
+        "4️⃣ De acuerdo\n"
+        "5️⃣ Completamente de acuerdo"
+    )
     return f"{encabezado}\n\n{cuerpo}\n\n{escala}"
 
 mensaje_ahorro_consejos = (
@@ -1262,24 +1259,24 @@ def _procesar_mensaje_interno(mensaje, numero):
             estado_usuario[numero] = {"esperando": "menu_jubilacion"}
             return mensaje_submenu_jubilacion
 
-        if texto_limpio in ["5", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
-            estado_usuario[numero] = {}
-            return mensaje_creditos
-
-        if texto_limpio in ["6", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
-            estado_usuario[numero] = {}
-            return mensaje_glosario
+        if texto_limpio in ["5", "género y finanzas", "genero y finanzas"]:
+            estado_usuario[numero] = {"esperando": "menu_genero"}
+            return mensaje_submenu_genero
 
         if texto_limpio in [
-            "7", "evalúa tu salud financiera", "evalua tu salud financiera",
+            "6", "evalúa tu salud financiera", "evalua tu salud financiera",
             "evaluar mi salud financiera", "salud financiera",
         ]:
             estado_usuario[numero] = {"esperando": "menu_salud"}
             return mensaje_submenu_salud
 
-        if texto_limpio in ["8", "género y finanzas", "genero y finanzas"]:
-            estado_usuario[numero] = {"esperando": "menu_genero"}
-            return mensaje_submenu_genero
+        if texto_limpio in ["7", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
+            estado_usuario[numero] = {}
+            return mensaje_glosario
+
+        if texto_limpio in ["8", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
+            estado_usuario[numero] = {}
+            return mensaje_creditos
 
         # Accesos directos por nombre exacto de cada herramienta, para quien ya conoce el bot
         # y prefiere escribirlo directamente sin pasar por los submenús.
@@ -1571,12 +1568,8 @@ def _procesar_mensaje_interno(mensaje, numero):
 
                 if contexto["salud_dim_idx"] >= len(contexto["salud_dimensiones"]):
                     # No quedan más dimensiones por evaluar: terminamos aquí.
-                    estado_usuario.pop(numero, None)
-                    return (
-                        resultado_texto
-                        + "Escribe *menú* para volver al inicio, o *evalúa tu salud financiera* para "
-                        "hacerlo de nuevo."
-                    )
+                    estado_usuario[numero] = {"esperando": "menu_salud"}
+                    return resultado_texto + mensaje_submenu_salud
 
             siguiente_dim_key = contexto["salud_dimensiones"][contexto["salud_dim_idx"]]
             siguiente_dim = DIMENSIONES_SALUD[siguiente_dim_key]
