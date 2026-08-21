@@ -557,7 +557,7 @@ def calcular_ahorro_jubilacion(meta, ahorro_actual, anios, tasa_anual_pct, perio
 saludo_inicial = (
     "👋 Hola 😊, soy tu asistente virtual de Educación Financiera para el Mundo, un proyecto de la "
     "Facultad de Ciencias Administrativas de la Universidad Autónoma de Baja California (UABC) y "
-    "estoy aquí para ayudarte a comprender mejor el mundo de tu dinero.\n\n"
+    "estoy aquí para ayudarte a comprender mejor el mundo de las finanzas.\n\n"
     "Escríbeme el número o el nombre de alguna de estas opciones para empezar:\n"
     "1️⃣ Ahorro\n"
     "2️⃣ Crédito\n"
@@ -565,6 +565,8 @@ saludo_inicial = (
     "4️⃣ Jubilación\n"
     "5️⃣ ¿Quiénes hicimos este bot?\n"
     "6️⃣ Glosario de términos financieros\n"
+    "7️⃣ Evalúa tu salud financiera\n"
+    "8️⃣ Género y finanzas\n"
     "No te preocupes si no conoces todos estos términos, yo te voy guiando paso a paso 😊\n\n"
     "🔒 Este bot nunca te va a pedir contraseñas, NIP, CVV de tu tarjeta ni códigos de verificación. "
     "Si alguien más te los pide haciéndose pasar por este bot, no se los compartas."
@@ -612,6 +614,277 @@ mensaje_submenu_jubilacion = (
     "Escribe el número, o *menú* para regresar."
 )
 
+# =========================================
+# Género y finanzas
+# =========================================
+mensaje_submenu_genero = (
+    "♀️♂️ *Género y finanzas*\n\n"
+    "1️⃣ La brecha de género en el ahorro para el retiro\n"
+    "2️⃣ ¿Qué es la violencia económica y patrimonial?\n\n"
+    "Escribe el número, o *menú* para regresar."
+)
+
+mensaje_genero_brecha_retiro = (
+    "♀️ *La brecha de género en el ahorro para el retiro*\n\n"
+    "En México, las mujeres suelen terminar con menos dinero ahorrado para su retiro que los hombres, y no "
+    "es casualidad: hay razones estructurales detrás.\n"
+    "________________________________________\n"
+    "📊 Según CONSAR (2022), por cada 100 pesos de pensión que recibe un hombre, una mujer recibe "
+    "aproximadamente 70.6 pesos.\n"
+    "📊 En promedio, las mujeres tienen unos 24,000 pesos menos ahorrados en su cuenta Afore que los hombres "
+    "(CONSAR, 2023).\n"
+    "________________________________________\n"
+    "¿Por qué pasa esto?\n"
+    "📌 Interrupciones laborales por cuidados: las mujeres realizan el 74% del trabajo doméstico y de "
+    "cuidados no remunerado en México (CONSAR, 2022), lo que muchas veces significa menos años cotizando.\n"
+    "📌 Brecha salarial: según INEGI (2024), por cada 100 pesos que gana un hombre, una mujer gana en "
+    "promedio 66; incluso comparando el mismo puesto de trabajo, la diferencia ronda el 15%.\n"
+    "📌 Mayor esperanza de vida: las mujeres viven en promedio 2.4 años más después de los 65 (CONSAR, "
+    "2022), así que su ahorro necesita alcanzar para más tiempo.\n"
+    "________________________________________\n"
+    "💡 Si te identificas con esto, dentro de *Jubilación* tienes herramientas que te pueden ayudar: la "
+    "calculadora de meta de ahorro, cómo saber en qué Afore estás, cómo hacer aportaciones voluntarias, y "
+    "opciones si no has trabajado de forma formal. Empezar temprano, aunque sea con poco, hace una "
+    "diferencia real.\n"
+    "________________________________________\n"
+) + "\n" + mensaje_submenu_genero
+
+mensaje_genero_violencia_economica = (
+    "⚖️ *¿Qué es la violencia económica y patrimonial?*\n\n"
+    "En México, controlar el dinero de otra persona o dañar su patrimonio está reconocido legalmente como "
+    "una forma de violencia (Ley General de Acceso de las Mujeres a una Vida Libre de Violencia, Artículo "
+    "6).\n"
+    "________________________________________\n"
+    "📌 *Violencia patrimonial*: cuando alguien te quita, destruye, esconde o retiene tus objetos, "
+    "documentos personales, bienes o recursos económicos que necesitas para vivir.\n"
+    "📌 *Violencia económica*: cuando alguien controla o limita tu acceso a tu propio dinero, por ejemplo "
+    "impidiéndote trabajar o manejar tus ingresos, o cuando te pagan menos que a otra persona por el mismo "
+    "trabajo.\n"
+    "________________________________________\n"
+    "🚩 Algunas señales: que alguien te prohíba trabajar o estudiar, te quite tu sueldo o tarjetas, te pida "
+    "cuentas de cada peso que gastas, te esconda información sobre las finanzas del hogar, o dañe tus bienes "
+    "a propósito.\n"
+    "________________________________________\n"
+    "📢 Si estás viviendo una situación de violencia, llama al 911 en caso de emergencia. Para denunciar o "
+    "pedir orientación, puedes acudir al Ministerio Público, a la Fiscalía, o al Instituto de las Mujeres de "
+    "tu estado.\n"
+    "________________________________________\n"
+    "💡 Reconocer esto es el primer paso. Tener información y claridad sobre tus propias finanzas, como la "
+    "que este bot te ofrece, también es una herramienta de autonomía.\n"
+    "________________________________________\n"
+) + "\n" + mensaje_submenu_genero
+
+# =========================================
+# Evalúa tu salud financiera
+# =========================================
+# Basado en el instrumento "Semáforo de Salud Financiera" de la UABC.
+# Cada dimensión se evalúa por separado (la persona elige cuál/es), pregunta
+# por pregunta, con respuestas en escala de 1 a 5. Al final de cada
+# dimensión se suman los puntos y se ubica el resultado en su rango
+# correspondiente (🔴/🟡/🟢), con una recomendación conectada al resto del
+# bot.
+mensaje_submenu_salud = (
+    "🚦 *Evalúa tu salud financiera*\n\n"
+    "Vamos a ver qué tan saludables están tus finanzas en 4 dimensiones:\n"
+    "________________________________________\n"
+    "🛡️ *Resiliencia*: tu capacidad para enfrentar imprevistos y emergencias económicas sin que se desestabilicen tus finanzas.\n"
+    "🕊️ *Libertad*: qué tan libre te sientes de disfrutar tu dinero y alcanzar tus metas personales sin que la preocupación financiera te limite.\n"
+    "🔐 *Seguridad*: qué tan protegido/a estás financieramente: tus ahorros, deudas, historial crediticio y seguros.\n"
+    "🎯 *Control*: qué tanto le das seguimiento y manejas de forma consciente tus ingresos, gastos y decisiones financieras.\n"
+    "________________________________________\n"
+    "¿Quieres evaluar alguna? Te decimos cómo andas con un semáforo (🔴🟡🟢) y te ofrecemos contenido de este "
+    "bot para seguir mejorando tu salud financiera.\n\n"
+    "1️⃣ Resiliencia (5 preguntas)\n"
+    "2️⃣ Libertad (5 preguntas)\n"
+    "3️⃣ Seguridad (14 preguntas)\n"
+    "4️⃣ Control (14 preguntas)\n"
+    "5️⃣ Las 4 dimensiones completas (38 preguntas)\n\n"
+    "Escribe el número, o *menú* para regresar."
+)
+
+DIMENSIONES_SALUD = {
+    "resiliencia": {
+        "nombre": "Resiliencia financiera",
+        "emoji": "🛡️",
+        "preguntas": [
+            "Tengo suficiente dinero para asegurar que nunca falte comida en mi hogar.",
+            "Tengo suficiente dinero para cubrir los gastos médicos necesarios para mí o mi familia.",
+            "Puedo gastar dinero en pequeñas compras o regalos (boda, cumpleaños, otra ocasión, etc.) sin afectar mis finanzas.",
+            "Puedo hacer frente a un gasto imprevisto importante sin comprometer mi estabilidad financiera.",
+            "Puedo obtener rápidamente el dinero necesario para cubrir una emergencia financiera importante.",
+        ],
+        "rangos": [
+            (5, 13, "🔴", "Baja resiliencia financiera",
+             "Tienes dificultades para enfrentar imprevistos y cubrir tus necesidades básicas o emergencias "
+             "financieras. Tus respuestas indican que no cuentas con los recursos suficientes para resistir "
+             "contratiempos financieros."),
+            (14, 19, "🟡", "Resiliencia financiera moderada",
+             "Tienes cierta capacidad para hacer frente a imprevistos, pero aún hay áreas donde puedes mejorar. "
+             "Podrías enfrentar problemas financieros en el futuro si no tomas precauciones."),
+            (20, 25, "🟢", "Alta resiliencia financiera",
+             "Demuestras una sólida capacidad para hacer frente a emergencias e imprevistos financieros. Estás "
+             "bien preparado/a para manejar contratiempos sin comprometer tu estabilidad financiera."),
+        ],
+        "recomendacion_bajo": (
+            "💡 Te podría servir mucho construir un fondo de emergencia. Dentro de *Ahorro* tengo una "
+            "calculadora para definir tu meta de ahorro, y consejos prácticos para lograrlo sin sufrir en el "
+            "intento."
+        ),
+        "recomendacion_alto": (
+            "💡 Ya que tienes buena resiliencia, podrías aprovechar para que ese colchón de emergencia también "
+            "genere rendimiento. Échale un ojo a *Inversión*, sobre todo a las opciones de bajo riesgo como "
+            "CETES."
+        ),
+    },
+    "libertad": {
+        "nombre": "Libertad financiera",
+        "emoji": "🕊️",
+        "preguntas": [
+            "En los últimos 12 meses, he podido realizar una compra grande (casa, terreno, vehículo, etc.) sin comprometer mi estabilidad financiera.",
+            "Me propongo metas financieras claras sobre lo que quiero lograr con mi dinero.",
+            "Tengo un plan de acción claro con pasos detallados para alcanzar mis metas financieras.",
+            "Me siento confiado(a) de poder alcanzar cualquier meta financiera personal que me proponga.",
+            "Puedo disfrutar la vida de la manera que quiero gracias a la forma en que gestiono mi dinero.",
+        ],
+        "rangos": [
+            (5, 13, "🔴", "Baja libertad financiera",
+             "Tienes poca libertad para disfrutar de tu vida o realizar gastos sin preocuparte por tu situación "
+             "financiera. Sientes que no puedes obtener las cosas que deseas debido a limitaciones económicas."),
+            (14, 19, "🟡", "Libertad financiera moderada",
+             "Tienes cierta capacidad para disfrutar de tu vida y alcanzar metas financieras, pero aún tienes "
+             "preocupaciones o limitaciones. Es posible hacer algunos gastos, pero no siempre con tranquilidad."),
+            (20, 25, "🟢", "Alta libertad financiera",
+             "Tienes una alta libertad financiera. Puedes realizar gastos importantes, disfrutar de tu vida y "
+             "alcanzar tus metas financieras sin preocuparte por tu estabilidad económica."),
+        ],
+        "recomendacion_bajo": (
+            "💡 Ponerte metas financieras claras puede ayudarte mucho aquí. Dentro de *Ahorro* tengo una "
+            "calculadora para definir cuánto necesitas apartar para lograr una meta específica, y dentro de "
+            "*Inversión* puedes ver cómo crecer tu dinero con el tiempo para metas más grandes."
+        ),
+        "recomendacion_alto": (
+            "💡 Ya tienes buena claridad sobre tus metas. Podrías revisar *Jubilación* para asegurar que esa "
+            "libertad se mantenga también a largo plazo."
+        ),
+    },
+    "seguridad": {
+        "nombre": "Seguridad financiera",
+        "emoji": "🔐",
+        "preguntas": [
+            "En un mes típico, puedo pagar todos mis gastos y facturas.",
+            "Puedo pagar el lugar donde vivo (hipoteca, renta, etc.) sin comprometer mi estabilidad financiera.",
+            "Tengo una cuenta bancaria donde puedo ahorrar y recibir pagos sin problema.",
+            "Ahorro de manera regular, apartando dinero cada mes.",
+            "Tengo ahorros suficientes para cubrir varios meses de gastos en caso de necesidad.",
+            "Mi historial crediticio es excelente y refleja una gestión financiera óptima.",
+            "Tengo el nivel adecuado de deuda que no afecta mi estabilidad financiera.",
+            "Pago siempre lo que debo en el tiempo adecuado cuando pido dinero prestado o realizo una compra a crédito.",
+            "No necesito pedir dinero prestado para pagar mis deudas.",
+            "Si necesitara pedir dinero prestado, podría obtenerlo fácilmente de diversas fuentes sin problemas.",
+            "Tengo un plan financiero sólido para mi retiro.",
+            "Tengo un seguro de vida.",
+            "Tengo un seguro que protege mis propiedades, acciones e inversiones.",
+            "Tengo un seguro médico.",
+        ],
+        "rangos": [
+            (14, 37, "🔴", "Baja seguridad financiera",
+             "Tienes dificultades significativas para manejar tus finanzas de manera segura. Podrías tener "
+             "problemas para cumplir con tus obligaciones financieras, gestionar deudas, o ahorrar para el "
+             "futuro, lo que te deja vulnerable ante imprevistos."),
+            (38, 55, "🟡", "Seguridad financiera moderada",
+             "Tienes una seguridad financiera moderada. Estás gestionando tus finanzas relativamente bien, pero "
+             "hay áreas que necesitan mejora. Eres capaz de cubrir tus obligaciones financieras básicas, pero "
+             "podrías estar en riesgo si enfrentas situaciones inesperadas."),
+            (56, 70, "🟢", "Alta seguridad financiera",
+             "Demuestras una alta seguridad financiera. Eres capaz de cumplir con tus obligaciones financieras, "
+             "tienes un buen historial crediticio, ahorras regularmente y estás preparado/a para imprevistos."),
+        ],
+        "recomendacion_bajo": (
+            "💡 Dentro de *Crédito* tengo consejos para pagar sin ahogarte, cómo entender tu Buró de Crédito, y "
+            "tus derechos frente al cobro de deudas. Y dentro de *Ahorro*, la calculadora de meta de ahorro te "
+            "puede ayudar a construir un colchón para imprevistos."
+        ),
+        "recomendacion_alto": (
+            "💡 Tienes una base sólida. Podrías revisar *Jubilación* para confirmar que también estás "
+            "preparado/a a largo plazo."
+        ),
+    },
+    "control": {
+        "nombre": "Control financiero",
+        "emoji": "🎯",
+        "preguntas": [
+            "Gasto menos de lo que gano.",
+            "Llevo un registro o control de mis gastos.",
+            "Reviso regularmente mis estados de cuenta.",
+            "Soy capaz de ahorrar regularmente una parte de mis ingresos para el futuro.",
+            "Siempre tomo el tiempo necesario para decidir sobre pedir dinero prestado o hacer compras a crédito.",
+            "No compro cosas por impulso de las que luego me arrepiento.",
+            "Comprendo cómo el aumento en las tasas de interés afecta los precios de bienes y servicios.",
+            "Una hipoteca de 15 años requiere pagos mensuales más altos, pero paga menos intereses a lo largo de la vida del préstamo en comparación con una hipoteca de 30 años.",
+            "Si la inflación es mayor que la tasa de interés en mi cuenta de ahorro, podré comprar menos con ese dinero después de un año.",
+            "Soy consciente de los riesgos y beneficios de diversificar mis inversiones para maximizar las ganancias y reducir pérdidas.",
+            "Entiendo el impacto de hacer solo los pagos mínimos en mi deuda de tarjeta de crédito y cómo afecta el tiempo necesario para pagarla.",
+            "Sé cuándo necesito asesoramiento sobre cómo manejar mi dinero.",
+            "Sé dónde buscar asesoramiento para tomar decisiones financieras.",
+            "Tengo metas financieras claras a corto y largo plazo.",
+        ],
+        "rangos": [
+            (14, 37, "🔴", "Bajo control financiero",
+             "Tienes un bajo nivel de control sobre tus finanzas. Podrías no estar revisando tus ingresos y "
+             "gastos de manera regular, tener dificultades para cumplir con un presupuesto, y ser propenso/a a "
+             "realizar compras impulsivas o tomar malas decisiones financieras."),
+            (38, 55, "🟡", "Control financiero moderado",
+             "Tienes un control financiero aceptable pero con áreas de mejora. Aunque eres capaz de gestionar "
+             "tus finanzas en cierta medida, puede haber ocasiones en las que pierdas el control de tus gastos o "
+             "no sigas estrictamente un plan financiero."),
+            (56, 70, "🟢", "Alto control financiero",
+             "Tienes un alto control sobre tus finanzas. Mantienes un seguimiento claro de tus ingresos y "
+             "gastos, sigues un presupuesto, ahorras regularmente y tomas decisiones financieras informadas."),
+        ],
+        "recomendacion_bajo": (
+            "💡 Dentro del *Glosario* puedes repasar varios términos que mencionamos aquí. Y en *Crédito* tengo "
+            "contenido sobre cómo identificar un crédito caro y errores comunes al pedir crédito, útil para "
+            "tomar mejores decisiones."
+        ),
+        "recomendacion_alto": (
+            "💡 Tienes muy buen control. Podrías profundizar en *Inversión*, en conceptos como diversificación, "
+            "para seguir tomando decisiones informadas."
+        ),
+    },
+}
+
+ORDEN_DIMENSIONES_SALUD = ["resiliencia", "libertad", "seguridad", "control"]
+
+def _resultado_dimension_salud(dim_key, puntaje):
+    dim = DIMENSIONES_SALUD[dim_key]
+    for minimo, maximo, color, etiqueta, descripcion in dim["rangos"]:
+        if minimo <= puntaje <= maximo:
+            recomendacion = dim["recomendacion_alto"] if color == "🟢" else dim["recomendacion_bajo"]
+            return (
+                f"{color} *{dim['emoji']} {dim['nombre']}: {etiqueta}* (puntaje: {puntaje})\n\n"
+                f"{descripcion}\n\n"
+                f"{recomendacion}"
+            )
+    # No debería pasar si el puntaje está dentro del rango posible, pero por seguridad:
+    return f"{dim['emoji']} *{dim['nombre']}*: tu puntaje fue {puntaje}."
+
+def _formatear_pregunta_salud(dim, idx, primera):
+    total = len(dim["preguntas"])
+    encabezado = f"{dim['emoji']} *{dim['nombre']}*, pregunta {idx + 1} de {total}"
+    cuerpo = dim["preguntas"][idx]
+    if primera:
+        escala = (
+            "Responde cada afirmación con un número del 1 al 5:\n"
+            "1️⃣ Completamente en desacuerdo\n"
+            "2️⃣ En desacuerdo\n"
+            "3️⃣ Ni de acuerdo ni en desacuerdo\n"
+            "4️⃣ De acuerdo\n"
+            "5️⃣ Completamente de acuerdo"
+        )
+    else:
+        escala = "Responde del 1 (completamente en desacuerdo) al 5 (completamente de acuerdo)."
+    return f"{encabezado}\n\n{cuerpo}\n\n{escala}"
+
 mensaje_ahorro_consejos = (
     "💡 *Consejos para ahorrar sin sufrir en el intento*\n\n"
     "Ahorrar no tiene que sentirse como un sacrificio constante. Aquí van algunas ideas que te pueden ayudar a hacerlo de forma más simple y sostenible:\n"
@@ -632,8 +905,7 @@ mensaje_ahorro_consejos = (
     "📌 No es lo mismo ahorrar en general que ahorrar para algo específico (tu fondo de emergencia, un viaje, un enganche).\n"
     "💡 Tener metas claras te ayuda a mantenerte motivado/a y a no gastarte el dinero en otra cosa.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_ahorro
 
 mensaje_ahorro_comparar_cuentas = (
     "🏦 *¿Dónde puedo comparar cuentas de ahorro entre bancos?*\n\n"
@@ -644,8 +916,7 @@ mensaje_ahorro_comparar_cuentas = (
     "________________________________________\n"
     "💡 Antes de abrir una cuenta nueva, vale la pena comparar al menos 2 o 3 opciones y revisar si cobran comisión por manejo de cuenta, porque eso también afecta cuánto realmente ganas.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_ahorro
 
 mensaje_inversion_conceptos_basicos = (
     "📚 *Conceptos básicos antes de invertir*\n\n"
@@ -665,8 +936,7 @@ mensaje_inversion_conceptos_basicos = (
     "🔍 4. Entiende en qué estás invirtiendo\n"
     "📌 Si no entiendes cómo genera dinero un instrumento, es una señal para investigar más antes de invertir en él.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_inversion
 
 mensaje_inversion_cetes = (
     "🏛️ *CETES y Cetesdirecto: invertir con bajo riesgo*\n\n"
@@ -679,8 +949,7 @@ mensaje_inversion_cetes = (
     "________________________________________\n"
     "💡 Los CETES no son la única opción, pero son un buen punto de partida para entender cómo funciona invertir antes de explorar opciones con más riesgo.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_inversion
 
 mensaje_inversion_fraudes = (
     "🚨 *Cómo identificar fraudes de inversión*\n\n"
@@ -701,8 +970,7 @@ mensaje_inversion_fraudes = (
     "________________________________________\n"
     "💡 Si algo no te queda claro o te da desconfianza, es válido decir que no. Nadie debería sentirse presionado a invertir su dinero.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_inversion
 
 mensaje_jubilacion_afore = (
     "🏦 *¿Qué es una Afore y cómo saber en cuál estoy?*\n\n"
@@ -714,8 +982,7 @@ mensaje_jubilacion_afore = (
     "________________________________________\n"
     "💡 Vale la pena revisarlo cada cierto tiempo, sobre todo si has cambiado de trabajo varias veces, para confirmar que tus aportaciones se estén acumulando correctamente.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_jubilacion
 
 mensaje_jubilacion_ley73_vs_ley97 = (
     "📜 *¿Cómo se calcula mi pensión? Ley 73 vs. Ley 97*\n\n"
@@ -734,8 +1001,7 @@ mensaje_jubilacion_ley73_vs_ley97 = (
     "________________________________________\n"
     "💡 Un error común: tener una cuenta de Afore NO significa que automáticamente estés en Ley 97, ya que quienes están en Ley 73 también tienen una cuenta de Afore, aunque su PENSIÓN puede seguir calculándose con la fórmula anterior.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_jubilacion
 
 mensaje_jubilacion_aportaciones_voluntarias = (
     "➕ *Aportaciones voluntarias: cómo aumentar tu ahorro para el retiro*\n\n"
@@ -747,8 +1013,7 @@ mensaje_jubilacion_aportaciones_voluntarias = (
     "________________________________________\n"
     "💡 No necesitas aportar grandes cantidades: aportar poco pero de forma constante también hace una diferencia real, gracias al interés compuesto, lo mismo que viste en la calculadora de esta sección.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_jubilacion
 
 mensaje_jubilacion_cambio_trabajo = (
     "🔄 *¿Qué pasa si cambio de trabajo o dejo de cotizar?*\n\n"
@@ -760,8 +1025,7 @@ mensaje_jubilacion_cambio_trabajo = (
     "________________________________________\n"
     "💡 Si trabajas de forma independiente o informal por temporadas, existe la opción de seguir aportando de forma voluntaria a tu Afore para no perder continuidad.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_jubilacion
 
 mensaje_jubilacion_independiente = (
     "🧑‍🌾 *No he trabajado de forma formal, ¿aún así puedo ahorrar para mi retiro?*\n\n"
@@ -781,8 +1045,7 @@ mensaje_jubilacion_independiente = (
     "💡 No necesitas esperar a tener un trabajo formal para empezar a construir un ahorro para tu "
     "retiro. Entre antes empieces, aunque sea con poco, más tiempo tiene ese dinero para crecer.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_jubilacion
 
 mensaje_credito_derechos_cobranza = (
     "⚖️ *Tus derechos frente al cobro de deudas*\n\n"
@@ -811,8 +1074,7 @@ mensaje_credito_derechos_cobranza = (
     "💡 Tener una deuda es una situación económica, no una razón para que alguien te trate mal. No "
     "tengas miedo de denunciar si algo así te pasa.\n"
     "________________________________________\n"
-    "Escribe *menú* para volver."
-)
+) + "\n" + mensaje_submenu_credito
 
 GLOSARIO_TERMINOS = [
     (["cat", "costo anual total"], "CAT (Costo Anual Total)",
@@ -972,6 +1234,7 @@ def _procesar_mensaje_interno(mensaje, numero):
             "jubilacion_meta", "jubilacion_ahorro_actual", "jubilacion_tasa_anual",
             "jubilacion_tiempo_numero", "jubilacion_tiempo_unidad",
             "jubilacion_frecuencia", "jubilacion_frecuencia_otro",
+            "menu_salud", "salud_pregunta", "menu_genero",
         ]:
             subflujo_critico = True
 
@@ -1006,6 +1269,17 @@ def _procesar_mensaje_interno(mensaje, numero):
         if texto_limpio in ["6", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
             estado_usuario[numero] = {}
             return mensaje_glosario
+
+        if texto_limpio in [
+            "7", "evalúa tu salud financiera", "evalua tu salud financiera",
+            "evaluar mi salud financiera", "salud financiera",
+        ]:
+            estado_usuario[numero] = {"esperando": "menu_salud"}
+            return mensaje_submenu_salud
+
+        if texto_limpio in ["8", "género y finanzas", "genero y finanzas"]:
+            estado_usuario[numero] = {"esperando": "menu_genero"}
+            return mensaje_submenu_genero
 
         # Accesos directos por nombre exacto de cada herramienta, para quien ya conoce el bot
         # y prefiere escribirlo directamente sin pasar por los submenús.
@@ -1245,6 +1519,88 @@ def _procesar_mensaje_interno(mensaje, numero):
                 return mensaje_jubilacion_independiente
             return "Por favor, elige una opción válida del menú de Jubilación, o escribe *menú* para regresar al inicio."
 
+        # --- Submenú: Evalúa tu salud financiera ---
+        if contexto["esperando"] == "menu_salud":
+            if texto_limpio in ["menu", "menú"]:
+                estado_usuario[numero] = {}
+                return saludo_inicial
+            mapa_opciones = {
+                "1": ["resiliencia"],
+                "2": ["libertad"],
+                "3": ["seguridad"],
+                "4": ["control"],
+                "5": ORDEN_DIMENSIONES_SALUD,
+            }
+            dimensiones_elegidas = mapa_opciones.get(texto_limpio)
+            if dimensiones_elegidas is None:
+                return "Por favor, elige una opción del 1 al 5, o escribe *menú* para regresar al inicio."
+            estado_usuario[numero] = {
+                "esperando": "salud_pregunta",
+                "salud_dimensiones": dimensiones_elegidas,
+                "salud_dim_idx": 0,
+                "salud_preg_idx": 0,
+                "salud_puntajes": {},
+            }
+            primera_dim = DIMENSIONES_SALUD[dimensiones_elegidas[0]]
+            return (
+                "Vamos a empezar. Responde con la mayor honestidad posible; no hay respuestas correctas o "
+                "incorrectas, solo te ayudan a entender mejor tu situación 🙂\n\n"
+                + _formatear_pregunta_salud(primera_dim, 0, primera=True)
+            )
+
+        # --- Evalúa tu salud financiera: flujo de preguntas ---
+        if contexto["esperando"] == "salud_pregunta":
+            if texto_limpio in ["menu", "menú"]:
+                estado_usuario[numero] = {}
+                return saludo_inicial
+            if texto_limpio not in ["1", "2", "3", "4", "5"]:
+                return "Por favor responde con un número del 1 (completamente en desacuerdo) al 5 (completamente de acuerdo)."
+
+            valor = int(texto_limpio)
+            dim_key = contexto["salud_dimensiones"][contexto["salud_dim_idx"]]
+            contexto["salud_puntajes"][dim_key] = contexto["salud_puntajes"].get(dim_key, 0) + valor
+            contexto["salud_preg_idx"] += 1
+
+            resultado_texto = ""
+            dim_actual = DIMENSIONES_SALUD[dim_key]
+            if contexto["salud_preg_idx"] >= len(dim_actual["preguntas"]):
+                # Se completó esta dimensión: calculamos y mostramos su resultado.
+                resultado_texto = _resultado_dimension_salud(dim_key, contexto["salud_puntajes"][dim_key]) + "\n\n"
+                contexto["salud_dim_idx"] += 1
+                contexto["salud_preg_idx"] = 0
+
+                if contexto["salud_dim_idx"] >= len(contexto["salud_dimensiones"]):
+                    # No quedan más dimensiones por evaluar: terminamos aquí.
+                    estado_usuario.pop(numero, None)
+                    return (
+                        resultado_texto
+                        + "Escribe *menú* para volver al inicio, o *evalúa tu salud financiera* para "
+                        "hacerlo de nuevo."
+                    )
+
+            siguiente_dim_key = contexto["salud_dimensiones"][contexto["salud_dim_idx"]]
+            siguiente_dim = DIMENSIONES_SALUD[siguiente_dim_key]
+            idx = contexto["salud_preg_idx"]
+            pregunta_texto = _formatear_pregunta_salud(siguiente_dim, idx, primera=(idx == 0))
+            return resultado_texto + pregunta_texto
+
+        # --- Submenú: Género y finanzas ---
+        if contexto["esperando"] == "menu_genero":
+            if texto_limpio in ["menu", "menú"]:
+                estado_usuario[numero] = {}
+                return saludo_inicial
+            if texto_limpio in [
+                "1", "la brecha de género en el ahorro para el retiro",
+                "la brecha de genero en el ahorro para el retiro",
+            ]:
+                return mensaje_genero_brecha_retiro
+            if texto_limpio in [
+                "2", "qué es la violencia económica y patrimonial",
+                "que es la violencia economica y patrimonial",
+            ]:
+                return mensaje_genero_violencia_economica
+            return "Por favor, elige una opción válida de esta sección, o escribe *menú* para regresar al inicio."
+
         # --- Submenú: Crédito ---
         if contexto["esperando"] == "menu_credito":
             if texto_limpio in ["menu", "menú"]:
@@ -1321,8 +1677,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "✅ 5. Prioriza las deudas más caras\n"
                     "📌 Si tienes varias, enfócate primero en las que tienen interés más alto, como tarjetas de crédito.\n"
                     "________________________________________\n"
-                    "Escribe *menú* para volver."
-                )
+                ) + "\n" + mensaje_submenu_credito
             if texto_limpio == "6":
                 return (
                     "Muchas veces un crédito parece accesible… hasta que ves lo que terminas pagando. Aquí te doy algunas claves para detectar si un crédito es caro:\n\n"
@@ -1339,8 +1694,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "🔍 4. Pago mensual bajo con plazo largo\n"
                     "Parece atractivo, pero terminas pagando muchísimo más en intereses.\n\n"
                     "❗ Si el crédito parece demasiado fácil o rápido, pero no entiendes bien cuánto vas a pagar en total... ¡es una señal de alerta!\n\n"
-                    "Escribe *menú* para volver."
-                )
+                ) + "\n" + mensaje_submenu_credito
             if texto_limpio == "7":
                 return (
                     "Solicitar un crédito es una gran responsabilidad. Aquí te comparto algunos errores comunes que muchas personas cometen… ¡y cómo evitarlos!\n"
@@ -1366,8 +1720,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "❌ 5. Usar un crédito sin un plan de pago\n"
                     "📌 Si no sabes cómo lo vas a pagar, puedes meterte en problemas.\n"
                     "✅ Haz un presupuesto antes de aceptar cualquier crédito.\n\n"
-                    "Escribe *menú* para volver."
-                )
+                ) + "\n" + mensaje_submenu_credito
             if texto_limpio == "9":
                 return mensaje_credito_derechos_cobranza
             return "Por favor, elige un número del 1 al 9 del menú de Crédito, o escribe *menú* para regresar al inicio."
