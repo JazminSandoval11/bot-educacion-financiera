@@ -702,6 +702,19 @@ mensaje_submenu_salud = (
     "Escribe el número, o *menú* para regresar."
 )
 
+# Versión corta del submenú, usada como pie después de mostrar el resultado de
+# una dimensión: mantiene las opciones de navegación disponibles (evaluar otra
+# dimensión o volver al inicio) sin repetir toda la explicación de arriba.
+mensaje_salud_cierre = (
+    "¿Quieres evaluar otra dimensión?\n"
+    "1️⃣ Resiliencia\n"
+    "2️⃣ Libertad\n"
+    "3️⃣ Seguridad\n"
+    "4️⃣ Control\n"
+    "5️⃣ Las 4 dimensiones completas\n\n"
+    "O escribe *menú* para volver al inicio."
+)
+
 DIMENSIONES_SALUD = {
     "resiliencia": {
         "nombre": "Resiliencia financiera",
@@ -1061,38 +1074,38 @@ mensaje_credito_derechos_cobranza = (
 ) + "\n" + mensaje_submenu_credito
 
 GLOSARIO_TERMINOS = [
-    (["cat", "costo anual total"], "CAT (Costo Anual Total)",
-     "Un número que junta la tasa de interés más las comisiones de un crédito, para que puedas comparar qué tan caro es de verdad. Entre más alto el CAT, más caro te sale el crédito."),
-    (["tasa de interés", "tasa anual", "tasa periodo", "tasa por periodo"], "Tasa de interés",
-     "El porcentaje que te cobran (si pides prestado) o que te pagan (si ahorras/inviertes) sobre el dinero, normalmente expresado por año."),
-    (["deuda revolvente"], "Deuda revolvente",
-     "Una deuda sin fecha fija para terminarse, como una tarjeta de crédito: vas pagando lo que usas cada mes, y puedes seguir usando el crédito disponible."),
-    (["buró de crédito", "buro de credito"], "Buró de Crédito",
-     "Una empresa que guarda tu historial de pagos de créditos. Si pagas bien, tu historial ayuda a que te aprueben créditos en el futuro; si te atrasas, se refleja ahí."),
     (["afore"], "Afore",
      "La institución que administra el dinero que se va acumulando para tu pensión (Administradora de Fondos para el Retiro)."),
-    (["ley 73"], "Ley 73",
-     "Las reglas para calcular la pensión de quienes se registraron en el IMSS ANTES del 1 de julio de 1997."),
-    (["ley 97"], "Ley 97",
-     "Las reglas para calcular la pensión de quienes se registraron en el IMSS A PARTIR del 1 de julio de 1997."),
-    (["cuota social"], "Cuota social",
-     "Una aportación extra que da el gobierno a tu cuenta Afore, además de lo que aportas tú y tu patrón."),
-    (["semanas cotizadas"], "Semanas cotizadas",
-     "El número de semanas que has trabajado de forma formal (registrado en el IMSS). Se necesita un mínimo de semanas cotizadas para tener derecho a una pensión."),
-    (["interés compuesto"], "Interés compuesto",
-     "Cuando el interés que ganas (o debes) también genera más interés con el tiempo, no solo el dinero original. Por eso el dinero puede crecer mucho más mientras más tiempo lo dejes invertido."),
-    (["modalidad 40"], "Modalidad 40",
-     "Una opción para seguir aportando al IMSS de forma voluntaria cerca de tu retiro (solo aplica si estás en Ley 73), para intentar subir el monto de tu pensión."),
-    (["uma"], "UMA (Unidad de Medida y Actualización)",
-     "Un valor en pesos que el gobierno actualiza cada año, y que se usa como referencia para calcular distintos límites y montos en trámites oficiales, incluyendo temas de pensiones."),
+    (["buró de crédito", "buro de credito"], "Buró de Crédito",
+     "Una empresa que guarda tu historial de pagos de créditos. Si pagas bien, tu historial ayuda a que te aprueben créditos en el futuro; si te atrasas, se refleja ahí."),
+    (["capacidad de pago"], "Capacidad de pago",
+     "Cuánto dinero de tu ingreso te queda disponible cada mes, después de tus gastos y deudas actuales, para poder pagar un crédito nuevo sin ahogarte."),
+    (["cat", "costo anual total"], "CAT (Costo Anual Total)",
+     "Un número que junta la tasa de interés más las comisiones de un crédito, para que puedas comparar qué tan caro es de verdad. Entre más alto el CAT, más caro te sale el crédito."),
     (["cetes"], "CETES",
      "Certificados de la Tesorería: deuda del gobierno mexicano. Al comprarlos, básicamente le prestas dinero al gobierno a cambio de un interés. Se consideran de bajo riesgo."),
+    (["cuota social"], "Cuota social",
+     "Una aportación extra que da el gobierno a tu cuenta Afore, además de lo que aportas tú y tu patrón."),
+    (["deuda revolvente"], "Deuda revolvente",
+     "Una deuda sin fecha fija para terminarse, como una tarjeta de crédito: vas pagando lo que usas cada mes, y puedes seguir usando el crédito disponible."),
     (["diversificar", "diversificación"], "Diversificar",
      "No poner todo tu dinero en una sola opción de inversión, para que si una no funciona bien, no pierdas todo."),
     (["ingreso neto", "ingreso mensual neto"], "Ingreso neto",
      "Lo que realmente recibes de dinero después de impuestos: lo que te depositan o te dan en efectivo."),
-    (["capacidad de pago"], "Capacidad de pago",
-     "Cuánto dinero de tu ingreso te queda disponible cada mes, después de tus gastos y deudas actuales, para poder pagar un crédito nuevo sin ahogarte."),
+    (["interés compuesto"], "Interés compuesto",
+     "Cuando el interés que ganas (o debes) también genera más interés con el tiempo, no solo el dinero original. Por eso el dinero puede crecer mucho más mientras más tiempo lo dejes invertido."),
+    (["ley 73"], "Ley 73",
+     "Las reglas para calcular la pensión de quienes se registraron en el IMSS ANTES del 1 de julio de 1997."),
+    (["ley 97"], "Ley 97",
+     "Las reglas para calcular la pensión de quienes se registraron en el IMSS A PARTIR del 1 de julio de 1997."),
+    (["modalidad 40"], "Modalidad 40",
+     "Una opción para seguir aportando al IMSS de forma voluntaria cerca de tu retiro (solo aplica si estás en Ley 73), para intentar subir el monto de tu pensión."),
+    (["semanas cotizadas"], "Semanas cotizadas",
+     "El número de semanas que has trabajado de forma formal (registrado en el IMSS). Se necesita un mínimo de semanas cotizadas para tener derecho a una pensión."),
+    (["tasa de interés", "tasa anual", "tasa periodo", "tasa por periodo"], "Tasa de interés",
+     "El porcentaje que te cobran (si pides prestado) o que te pagan (si ahorras/inviertes) sobre el dinero, normalmente expresado por año."),
+    (["uma"], "UMA (Unidad de Medida y Actualización)",
+     "Un valor en pesos que el gobierno actualiza cada año, y que se usa como referencia para calcular distintos límites y montos en trámites oficiales, incluyendo temas de pensiones."),
 ]
 
 mensaje_glosario = (
@@ -1556,7 +1569,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                 if contexto["salud_dim_idx"] >= len(contexto["salud_dimensiones"]):
                     # No quedan más dimensiones por evaluar: terminamos aquí.
                     estado_usuario[numero] = {"esperando": "menu_salud"}
-                    return resultado_texto + mensaje_submenu_salud
+                    return resultado_texto + mensaje_salud_cierre
 
             siguiente_dim_key = contexto["salud_dimensiones"][contexto["salud_dim_idx"]]
             siguiente_dim = DIMENSIONES_SALUD[siguiente_dim_key]
