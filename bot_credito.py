@@ -696,9 +696,9 @@ mensaje_submenu_salud = (
     "bot para seguir mejorando tu salud financiera.\n\n"
     "1️⃣ Resiliencia (5 preguntas)\n"
     "2️⃣ Libertad (5 preguntas)\n"
-    "3️⃣ Seguridad (14 preguntas)\n"
-    "4️⃣ Control (14 preguntas)\n"
-    "5️⃣ Las 4 dimensiones completas (38 preguntas)\n\n"
+    "3️⃣ Seguridad (7 preguntas)\n"
+    "4️⃣ Control (8 preguntas)\n"
+    "5️⃣ Las 4 dimensiones completas (25 preguntas)\n\n"
     "Escribe el número, o *menú* para regresar."
 )
 
@@ -707,11 +707,11 @@ DIMENSIONES_SALUD = {
         "nombre": "Resiliencia financiera",
         "emoji": "🛡️",
         "preguntas": [
-            "Tengo suficiente dinero para asegurar que nunca falte comida en mi hogar.",
-            "Tengo suficiente dinero para cubrir los gastos médicos necesarios para mí o mi familia.",
-            "Puedo gastar dinero en pequeñas compras o regalos (boda, cumpleaños, otra ocasión, etc.) sin afectar mis finanzas.",
-            "Puedo hacer frente a un gasto imprevisto importante sin comprometer mi estabilidad financiera.",
-            "Puedo obtener rápidamente el dinero necesario para cubrir una emergencia financiera importante.",
+            "Tengo el dinero suficiente para que nunca falte comida en mi casa.",
+            "Tengo el dinero suficiente para cubrir gastos médicos míos o de mi familia si se presentan.",
+            "Puedo gastar en compras pequeñas o regalos (una boda, un cumpleaños, etc.) sin que esto afecte mis finanzas.",
+            "Si tengo un gasto imprevisto importante, puedo cubrirlo sin que mis finanzas se tambaleen.",
+            "Si tuviera una emergencia económica, podría conseguir el dinero rápido para resolverla.",
         ],
         "rangos": [
             (5, 13, "🔴", "Baja resiliencia financiera",
@@ -740,11 +740,11 @@ DIMENSIONES_SALUD = {
         "nombre": "Libertad financiera",
         "emoji": "🕊️",
         "preguntas": [
-            "En los últimos 12 meses, he podido realizar una compra grande (casa, terreno, vehículo, etc.) sin comprometer mi estabilidad financiera.",
-            "Me propongo metas financieras claras sobre lo que quiero lograr con mi dinero.",
-            "Tengo un plan de acción claro con pasos detallados para alcanzar mis metas financieras.",
-            "Me siento confiado(a) de poder alcanzar cualquier meta financiera personal que me proponga.",
-            "Puedo disfrutar la vida de la manera que quiero gracias a la forma en que gestiono mi dinero.",
+            "En el último año pude hacer una compra grande (casa, terreno, coche, etc.) sin que esto desestabilizara mis finanzas.",
+            "Tengo claras las metas que quiero lograr con mi dinero.",
+            "Sé qué pasos seguir para llegar a mis metas financieras.",
+            "Me siento seguro/a de que puedo lograr las metas financieras que me proponga.",
+            "La forma en que manejo mi dinero me permite disfrutar la vida como quiero.",
         ],
         "rangos": [
             (5, 13, "🔴", "Baja libertad financiera",
@@ -771,31 +771,24 @@ DIMENSIONES_SALUD = {
         "nombre": "Seguridad financiera",
         "emoji": "🔐",
         "preguntas": [
-            "En un mes típico, puedo pagar todos mis gastos y facturas.",
-            "Puedo pagar el lugar donde vivo (hipoteca, renta, etc.) sin comprometer mi estabilidad financiera.",
-            "Tengo una cuenta bancaria donde puedo ahorrar y recibir pagos sin problema.",
-            "Ahorro de manera regular, apartando dinero cada mes.",
-            "Tengo ahorros suficientes para cubrir varios meses de gastos en caso de necesidad.",
-            "Mi historial crediticio es excelente y refleja una gestión financiera óptima.",
-            "Tengo el nivel adecuado de deuda que no afecta mi estabilidad financiera.",
-            "Pago siempre lo que debo en el tiempo adecuado cuando pido dinero prestado o realizo una compra a crédito.",
-            "No necesito pedir dinero prestado para pagar mis deudas.",
-            "Si necesitara pedir dinero prestado, podría obtenerlo fácilmente de diversas fuentes sin problemas.",
-            "Tengo un plan financiero sólido para mi retiro.",
-            "Tengo un seguro de vida.",
-            "Tengo un seguro que protege mis propiedades, acciones e inversiones.",
-            "Tengo un seguro médico.",
+            "En un mes normal, me alcanza para pagar todos mis gastos y recibos.",
+            "Puedo pagar el lugar donde vivo (renta, hipoteca, etc.) sin que esto me ahogue económicamente.",
+            "Aparto dinero para ahorrar de forma regular, mes con mes.",
+            "Tengo ahorros que me alcanzarían para cubrir varios meses de gastos si los necesitara.",
+            "Mi historial crediticio (buró de crédito) está en buen estado.",
+            "No tengo que pedir dinero prestado para pagar otras deudas que ya tengo.",
+            "Cuento con un seguro médico.",
         ],
         "rangos": [
-            (14, 37, "🔴", "Baja seguridad financiera",
+            (7, 17, "🔴", "Baja seguridad financiera",
              "Tienes dificultades significativas para manejar tus finanzas de manera segura. Podrías tener "
              "problemas para cumplir con tus obligaciones financieras, gestionar deudas, o ahorrar para el "
              "futuro, lo que te deja vulnerable ante imprevistos."),
-            (38, 55, "🟡", "Seguridad financiera moderada",
+            (18, 26, "🟡", "Seguridad financiera moderada",
              "Tienes una seguridad financiera moderada. Estás gestionando tus finanzas relativamente bien, pero "
              "hay áreas que necesitan mejora. Eres capaz de cubrir tus obligaciones financieras básicas, pero "
              "podrías estar en riesgo si enfrentas situaciones inesperadas."),
-            (56, 70, "🟢", "Alta seguridad financiera",
+            (27, 35, "🟢", "Alta seguridad financiera",
              "Demuestras una alta seguridad financiera. Eres capaz de cumplir con tus obligaciones financieras, "
              "tienes un buen historial crediticio, ahorras regularmente y estás preparado/a para imprevistos."),
         ],
@@ -814,30 +807,24 @@ DIMENSIONES_SALUD = {
         "emoji": "🎯",
         "preguntas": [
             "Gasto menos de lo que gano.",
-            "Llevo un registro o control de mis gastos.",
-            "Reviso regularmente mis estados de cuenta.",
-            "Soy capaz de ahorrar regularmente una parte de mis ingresos para el futuro.",
-            "Siempre tomo el tiempo necesario para decidir sobre pedir dinero prestado o hacer compras a crédito.",
-            "No compro cosas por impulso de las que luego me arrepiento.",
-            "Comprendo cómo el aumento en las tasas de interés afecta los precios de bienes y servicios.",
-            "Una hipoteca de 15 años requiere pagos mensuales más altos, pero paga menos intereses a lo largo de la vida del préstamo en comparación con una hipoteca de 30 años.",
-            "Si la inflación es mayor que la tasa de interés en mi cuenta de ahorro, podré comprar menos con ese dinero después de un año.",
-            "Soy consciente de los riesgos y beneficios de diversificar mis inversiones para maximizar las ganancias y reducir pérdidas.",
-            "Entiendo el impacto de hacer solo los pagos mínimos en mi deuda de tarjeta de crédito y cómo afecta el tiempo necesario para pagarla.",
-            "Sé cuándo necesito asesoramiento sobre cómo manejar mi dinero.",
-            "Sé dónde buscar asesoramiento para tomar decisiones financieras.",
-            "Tengo metas financieras claras a corto y largo plazo.",
+            "Llevo un control de en qué se me va el dinero.",
+            "Logro ahorrar una parte de mis ingresos de forma regular, pensando en el futuro.",
+            "No compro cosas por impulso de las que después me arrepiento.",
+            "Entiendo cómo, cuando suben las tasas de interés, también suben los precios de las cosas.",
+            "Sé que pagar solo el mínimo de mi tarjeta de crédito hace que me tarde mucho más en pagarla por completo.",
+            "Sé a dónde acudir si necesito ayuda para tomar decisiones sobre mi dinero.",
+            "Tengo metas financieras claras, tanto para el corto como para el largo plazo.",
         ],
         "rangos": [
-            (14, 37, "🔴", "Bajo control financiero",
+            (8, 21, "🔴", "Bajo control financiero",
              "Tienes un bajo nivel de control sobre tus finanzas. Podrías no estar revisando tus ingresos y "
              "gastos de manera regular, tener dificultades para cumplir con un presupuesto, y ser propenso/a a "
              "realizar compras impulsivas o tomar malas decisiones financieras."),
-            (38, 55, "🟡", "Control financiero moderado",
+            (22, 30, "🟡", "Control financiero moderado",
              "Tienes un control financiero aceptable pero con áreas de mejora. Aunque eres capaz de gestionar "
              "tus finanzas en cierta medida, puede haber ocasiones en las que pierdas el control de tus gastos o "
              "no sigas estrictamente un plan financiero."),
-            (56, 70, "🟢", "Alto control financiero",
+            (31, 40, "🟢", "Alto control financiero",
              "Tienes un alto control sobre tus finanzas. Mantienes un seguimiento claro de tus ingresos y "
              "gastos, sigues un presupuesto, ahorras regularmente y tomas decisiones financieras informadas."),
         ],
