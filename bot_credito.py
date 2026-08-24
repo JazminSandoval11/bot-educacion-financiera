@@ -142,6 +142,26 @@ MENSAJE_FRECUENCIA_JUBILACION = (
     "5️⃣ Otra frecuencia (tú me dices cuántas veces al año)"
 )
 
+MENSAJE_FRECUENCIA_EMPRENDEDOR = (
+    "Antes de empezar, dime cada cuánto quieres analizar tu negocio (por ejemplo, cuánto vendes y gastas "
+    "por semana, o por mes; tú eliges). Esto es importante porque, si más adelante me dices que tienes un "
+    "crédito, el pago de ese crédito se va a calcular usando este MISMO periodo, para que todos los números "
+    "cuadren entre sí.\n\n"
+    "1️⃣ Mensual\n"
+    "2️⃣ Quincenal (cada 15 días)\n"
+    "3️⃣ Catorcenal (cada 14 días)\n"
+    "4️⃣ Semanal\n"
+    "5️⃣ Otro periodo (tú me dices cuántas veces al año se repite)"
+)
+
+FRECUENCIA_EMPRENDEDOR_FRASE = {
+    "mensual": "al mes",
+    "quincenal": "a la quincena",
+    "catorcenal": "cada 14 días",
+    "semanal": "a la semana",
+    "personalizada": "en tu periodo elegido",
+}
+
 def calcular_plazo_y_tasa_periodo(anios, tasa_anual_pct, periodos_por_anio):
     """
     Convierte años + tasa anual (%) + frecuencia de pago en:
@@ -605,40 +625,44 @@ def calcular_resultado_precio_emprendedor(unidades, costo_unitario, costos_fijos
             "📌 Resultado con el precio que elegiste:\n"
             f"💲 Precio por unidad: ${precio_elegido:,.2f}\n"
             f"🧮 Costo por unidad: ${costo_unitario:,.2f}\n"
-            f"📉 Costos fijos del periodo: ${costos_fijos:,.2f}\n\n"
-            f"⚖️ Punto de equilibrio: necesitas vender {punto_equilibrio:,.0f} unidades en el periodo solo "
-            "para no perder dinero (cubrir tus costos, sin ganar ni perder).\n"
+            f"📉 Costos fijos en tu periodo: ${costos_fijos:,.2f}\n\n"
+            f"⚖️ Punto de equilibrio: necesitas vender {punto_equilibrio:,.0f} unidades en ese mismo periodo "
+            "solo para no perder dinero (cubrir tus costos, sin ganar ni perder).\n"
             f"{linea_utilidad}\n\n"
             "🔍 *Nota:* Este cálculo es una guía general y simplificada (no incluye impuestos ni el efecto "
-            "de un préstamo, aunque si tienes uno puedes sumar su pago mensual a tus costos fijos). No "
+            "de un préstamo, aunque si tienes uno puedes sumar el pago que hagas en tu periodo a tus costos fijos). No "
             "sustituye la asesoría de un contador."
         )
     except Exception as e:
         return f"❌ Error al calcular: {e}"
 
 # --- Calculadora completa: incluye crédito, depreciación e impuestos ---
-def calcular_pago_credito_primer_periodo(capital, tasa_interes_anual_pct, plazo_meses):
+def calcular_pago_credito_primer_periodo(capital, tasa_periodo, plazo_total):
     """
-    Dado el monto de un crédito, su tasa de interés ANUAL (en %) y su plazo en
-    meses, calcula el interés y el pago a capital del PRIMER mes usando el
-    sistema de pagos fijos (igual que en la calculadora de Crédito). Solo se
-    necesita el primer periodo porque es lo que usa la fórmula de precio.
+    Dado el monto de un crédito, la tasa de interés YA CONVERTIDA a un periodo
+    (por ejemplo mensual, quincenal o semanal: el mismo periodo que la
+    persona eligió para analizar su negocio) y el número total de pagos en ese
+    mismo periodo, calcula el interés y el pago a capital del PRIMER pago,
+    usando el sistema de pagos fijos (igual que en la calculadora de Crédito).
+    Solo se necesita el primer periodo porque es lo que usa la fórmula de
+    precio. Usar calcular_plazo_y_tasa_periodo() para obtener tasa_periodo y
+    plazo_total a partir de años + tasa anual + frecuencia elegida, para que
+    el crédito quede en el MISMO periodo que el resto del análisis.
     Si no hay crédito (capital 0), regresa (0, 0).
     """
     capital = Decimal(str(capital))
-    plazo_meses = int(plazo_meses)
+    plazo_total = int(plazo_total)
+    tasa_periodo = Decimal(str(tasa_periodo))
 
-    if capital <= 0 or plazo_meses <= 0:
+    if capital <= 0 or plazo_total <= 0:
         return Decimal("0"), Decimal("0")
 
-    tasa_mensual = (Decimal(str(tasa_interes_anual_pct)) / Decimal("100")) / Decimal("12")
-
-    if tasa_mensual == 0:
-        pago = capital / Decimal(plazo_meses)
+    if tasa_periodo == 0:
+        pago = capital / Decimal(plazo_total)
     else:
-        pago = (capital * tasa_mensual) / (Decimal("1") - (Decimal("1") + tasa_mensual) ** Decimal(-plazo_meses))
+        pago = (capital * tasa_periodo) / (Decimal("1") - (Decimal("1") + tasa_periodo) ** Decimal(-plazo_total))
 
-    interes = (capital * tasa_mensual).quantize(Decimal("0.01"))
+    interes = (capital * tasa_periodo).quantize(Decimal("0.01"))
     amortizacion_capital = (pago - interes).quantize(Decimal("0.01"))
     return interes, amortizacion_capital
 
@@ -679,12 +703,15 @@ def calcular_precio_sugerido_emprendedor_completo(
 
 def calcular_resultado_precio_emprendedor_completo(
     unidades, costo_unitario, pct_variable, costos_fijos, depreciacion,
-    interes, tasa_impositiva, precio_elegido,
+    interes, tasa_impositiva, precio_elegido, frase_periodo="en tu periodo elegido",
 ):
     """
     A partir de un precio elegido, calcula el punto de equilibrio y la
     utilidad NETA (ya con impuestos) si se venden las unidades planeadas,
     mostrando el desglose completo de ingresos, costos y utilidad.
+    frase_periodo es texto para mostrarle a la persona el periodo que eligió
+    (por ejemplo "al mes" o "a la semana"), para que quede claro a qué
+    periodo corresponden todos los montos, incluyendo el pago del crédito.
     """
     try:
         unidades = Decimal(str(unidades))
@@ -718,13 +745,13 @@ def calcular_resultado_precio_emprendedor_completo(
         return (
             "📌 Resultado con el precio que elegiste:\n"
             f"💲 Precio por unidad: ${precio_elegido:,.2f}\n"
-            f"💵 Ingresos totales ({unidades:,.0f} unidades): ${ingresos:,.2f}\n"
+            f"💵 Ingresos totales {frase_periodo} ({unidades:,.0f} unidades): ${ingresos:,.2f}\n"
             f"🧮 Costos variables (costo por unidad + % sobre ventas): ${costos_variables_totales:,.2f}\n"
-            f"📉 Costos fijos: ${costos_fijos:,.2f}\n"
-            f"🏭 Depreciación: ${depreciacion:,.2f}\n"
-            f"🏦 Intereses del crédito: ${interes:,.2f}\n"
+            f"📉 Costos fijos {frase_periodo}: ${costos_fijos:,.2f}\n"
+            f"🏭 Depreciación {frase_periodo}: ${depreciacion:,.2f}\n"
+            f"🏦 Intereses del crédito (primer pago): ${interes:,.2f}\n"
             f"🧾 Impuestos: ${impuestos.quantize(Decimal('0.01')):,.2f}\n\n"
-            f"⚖️ Punto de equilibrio: necesitas vender {punto_equilibrio:,.0f} unidades en el periodo solo "
+            f"⚖️ Punto de equilibrio: necesitas vender {punto_equilibrio:,.0f} unidades {frase_periodo} solo "
             "para no perder dinero.\n"
             f"{linea_utilidad}\n\n"
             "🔍 *Nota:* Este cálculo es una guía general. No sustituye la asesoría de un contador, sobre "
@@ -1452,17 +1479,27 @@ def _procesar_mensaje_interno(mensaje, numero):
             "menu_salud", "salud_pregunta", "menu_genero",
             "menu_emprendedor", "emprendedor_unidades", "emprendedor_costo_unitario",
             "emprendedor_costos_fijos", "emprendedor_utilidad_deseada", "emprendedor_precio_prueba",
+            "empc_frecuencia", "empc_frecuencia_otro",
             "empc_unidades", "empc_costo_unitario", "empc_pct_variable", "empc_costos_fijos",
             "empc_depreciacion", "empc_tiene_credito", "empc_credito_monto", "empc_credito_tasa",
             "empc_credito_plazo", "empc_tasa_impositiva", "empc_utilidad_deseada", "empc_precio_prueba",
         ]:
             subflujo_critico = True
 
+    # "menú" siempre debe funcionar como salida de emergencia, incluso en medio
+    # de un subflujo crítico (por ejemplo, a la mitad de una calculadora). Ahí
+    # solo protegemos los números 1-9 y otras palabras clave del menú principal
+    # (para no confundirlos con datos que la persona esté ingresando), pero la
+    # palabra "menú" en sí nunca es un dato válido dentro de ningún subflujo.
+    if texto_limpio in ["menu", "menú"]:
+        estado_usuario[numero] = {}
+        return saludo_inicial
+
     # ======================
     # MENÚ PRINCIPAL 1..8
     # ======================
     if not subflujo_critico:
-        if texto_limpio in ["hola", "menu", "menú"]:
+        if texto_limpio == "hola":
             estado_usuario[numero] = {}
             return saludo_inicial
 
@@ -1833,18 +1870,18 @@ def _procesar_mensaje_interno(mensaje, numero):
                 estado_usuario[numero] = {"esperando": "emprendedor_unidades"}
                 return (
                     "🧰 Vamos a calcular a cuánto te conviene vender tu producto o servicio, tu punto de "
-                    "equilibrio y la utilidad que tendrías.\n\n"
-                    "1️⃣ ¿Cuántas unidades (productos o servicios) esperas vender en el periodo que quieres "
-                    "analizar, por ejemplo en un mes? Escribe solo el número. (ejemplo: 100)"
+                    "equilibrio y la utilidad que tendrías. Puedes usar cualquier periodo para tu análisis "
+                    "(por ejemplo, por semana, por mes o por temporada); solo asegúrate de que todos los "
+                    "datos que me des sean para ese MISMO periodo.\n\n"
+                    "1️⃣ ¿Cuántas unidades (productos o servicios) esperas vender en ese periodo? Escribe "
+                    "solo el número. (ejemplo: 100)"
                 )
             if texto_limpio == "2":
-                estado_usuario[numero] = {"esperando": "empc_unidades"}
+                estado_usuario[numero] = {"esperando": "empc_frecuencia"}
                 return (
                     "🧰 Esta es la calculadora completa: vamos a incluir también costos variables en %, "
                     "depreciación, un posible crédito del negocio, e impuestos. Son varias preguntas, pero "
-                    "el resultado es más preciso.\n\n"
-                    "1️⃣ ¿Cuántas unidades (productos o servicios) esperas vender en el periodo que quieres "
-                    "analizar, por ejemplo en un mes? Escribe solo el número. (ejemplo: 100)"
+                    "el resultado es más preciso.\n\n" + MENSAJE_FRECUENCIA_EMPRENDEDOR
                 )
             if texto_limpio in ["3", "tips financieros para tu negocio", "tips financieros"]:
                 return mensaje_emprendedor_tips + "\n" + mensaje_submenu_emprendedor
@@ -1855,7 +1892,7 @@ def _procesar_mensaje_interno(mensaje, numero):
             try:
                 unidades = Decimal(mensaje.replace(",", ""))
                 if unidades <= 0:
-                    return "Las unidades deben ser mayores a cero. ¿Cuántas unidades esperas vender? (ejemplo: 100)"
+                    return "Las unidades deben ser mayores a cero. ¿Cuántas unidades esperas vender en ese periodo? (ejemplo: 100)"
                 contexto["emprendedor_unidades"] = unidades
                 contexto["esperando"] = "emprendedor_costo_unitario"
                 return "2️⃣ ¿Cuánto te cuesta producir o comprar cada unidad? (ejemplo: 50)"
@@ -1870,10 +1907,10 @@ def _procesar_mensaje_interno(mensaje, numero):
                 contexto["emprendedor_costo_unitario"] = costo_unitario
                 contexto["esperando"] = "emprendedor_costos_fijos"
                 return (
-                    "3️⃣ ¿Cuánto gastas en total en costos fijos durante ese mismo periodo? Por ejemplo, "
-                    "renta, sueldos, luz, internet (sin contar lo que gastas por cada unidad que vendes). "
-                    "Si tienes un préstamo relacionado a tu negocio, puedes incluir aquí el pago mensual. "
-                    "(ejemplo: 8000)"
+                    "3️⃣ ¿Cuánto gastas en total en costos fijos en ese mismo periodo? Por ejemplo, renta, "
+                    "sueldos, luz, internet (sin contar lo que gastas por cada unidad que vendes). Si tienes "
+                    "un préstamo relacionado a tu negocio, puedes incluir aquí el pago que hagas en ese "
+                    "periodo. (ejemplo: 8000)"
                 )
             except:
                 return "Por favor, indica el costo por unidad como un número (ejemplo: 50)."
@@ -1882,12 +1919,12 @@ def _procesar_mensaje_interno(mensaje, numero):
             try:
                 costos_fijos = Decimal(mensaje.replace(",", ""))
                 if costos_fijos < 0:
-                    return "Ese número no puede ser negativo 🙂 ¿Cuánto gastas en total en costos fijos en ese periodo?"
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto gastas en total en costos fijos en ese mismo periodo?"
                 contexto["emprendedor_costos_fijos"] = costos_fijos
                 contexto["esperando"] = "emprendedor_utilidad_deseada"
                 return (
-                    "4️⃣ ¿Cuánto te gustaría ganar de utilidad (ganancia) en ese periodo, además de cubrir "
-                    "tus costos? (ejemplo: 5000)"
+                    "4️⃣ ¿Cuánto te gustaría ganar de utilidad (ganancia) en ese mismo periodo, además de "
+                    "cubrir tus costos? (ejemplo: 5000)"
                 )
             except:
                 return "Por favor, indica tus costos fijos como un número (ejemplo: 8000)."
@@ -1896,7 +1933,7 @@ def _procesar_mensaje_interno(mensaje, numero):
             try:
                 utilidad_deseada = Decimal(mensaje.replace(",", ""))
                 if utilidad_deseada < 0:
-                    return "Ese número no puede ser negativo 🙂 ¿Cuánto te gustaría ganar de utilidad en ese periodo?"
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto te gustaría ganar de utilidad en ese mismo periodo?"
                 contexto["emprendedor_utilidad_deseada"] = utilidad_deseada
                 precio_sugerido = calcular_precio_sugerido_emprendedor(
                     contexto["emprendedor_unidades"],
@@ -1941,11 +1978,52 @@ def _procesar_mensaje_interno(mensaje, numero):
                 return "Por favor, indica el precio como un número (ejemplo: 60)."
 
         # --- Herramientas para el emprendedor: calculadora completa ---
+        if contexto["esperando"] == "empc_frecuencia":
+            if texto_limpio == "5":
+                contexto["esperando"] = "empc_frecuencia_otro"
+                return (
+                    "¿Cuántas veces al año se repite ese periodo? (ejemplo: si vas a analizar tu negocio "
+                    "cada 10 días, serían 36 veces al año)"
+                )
+            if texto_limpio not in FRECUENCIAS_PAGO:
+                return MENSAJE_FRECUENCIA_EMPRENDEDOR
+            frecuencia_label, periodos_por_anio = FRECUENCIAS_PAGO[texto_limpio]
+            contexto["empc_frecuencia_label"] = frecuencia_label
+            contexto["empc_periodos_por_anio"] = periodos_por_anio
+            contexto["empc_frecuencia_frase"] = FRECUENCIA_EMPRENDEDOR_FRASE[frecuencia_label]
+            contexto["esperando"] = "empc_unidades"
+            return (
+                f"Perfecto, vamos a trabajar con un periodo {frecuencia_label}. Todos los datos que te voy "
+                "a pedir (ventas, costos y, si tienes uno, el pago de tu crédito) van a ser para ese mismo "
+                "periodo.\n\n"
+                f"1️⃣ ¿Cuántas unidades (productos o servicios) esperas vender {contexto['empc_frecuencia_frase']}? "
+                "Escribe solo el número. (ejemplo: 100)"
+            )
+
+        if contexto["esperando"] == "empc_frecuencia_otro":
+            try:
+                periodos_por_anio = Decimal(mensaje.replace(",", ""))
+                if periodos_por_anio <= 0:
+                    return "Ese número debe ser mayor a cero. ¿Cuántas veces al año se repite tu periodo?"
+                contexto["empc_frecuencia_label"] = "personalizada"
+                contexto["empc_periodos_por_anio"] = periodos_por_anio
+                contexto["empc_frecuencia_frase"] = FRECUENCIA_EMPRENDEDOR_FRASE["personalizada"]
+                contexto["esperando"] = "empc_unidades"
+                return (
+                    "Perfecto, vamos a trabajar con ese periodo. Todos los datos que te voy a pedir (ventas, "
+                    "costos y, si tienes uno, el pago de tu crédito) van a ser para ese mismo periodo.\n\n"
+                    "1️⃣ ¿Cuántas unidades (productos o servicios) esperas vender en tu periodo elegido? "
+                    "Escribe solo el número. (ejemplo: 100)"
+                )
+            except:
+                return "Por favor, indica un número (ejemplo: 36)."
+
         if contexto["esperando"] == "empc_unidades":
             try:
                 unidades = Decimal(mensaje.replace(",", ""))
                 if unidades <= 0:
-                    return "Las unidades deben ser mayores a cero. ¿Cuántas unidades esperas vender? (ejemplo: 100)"
+                    frase = contexto.get("empc_frecuencia_frase", "en tu periodo elegido")
+                    return f"Las unidades deben ser mayores a cero. ¿Cuántas unidades esperas vender {frase}? (ejemplo: 100)"
                 contexto["empc_unidades"] = unidades
                 contexto["esperando"] = "empc_costo_unitario"
                 return "2️⃣ ¿Cuánto te cuesta producir o comprar cada unidad? (ejemplo: 50)"
@@ -1975,8 +2053,9 @@ def _procesar_mensaje_interno(mensaje, numero):
                     return "Ese porcentaje debe estar entre 0 y menos de 100. Si no aplica, escribe 0."
                 contexto["empc_pct_variable"] = pct_variable
                 contexto["esperando"] = "empc_costos_fijos"
+                frase = contexto.get("empc_frecuencia_frase", "en tu periodo elegido")
                 return (
-                    "4️⃣ ¿Cuánto gastas en total en costos fijos durante ese mismo periodo? Por ejemplo, "
+                    f"4️⃣ ¿Cuánto gastas en total en costos fijos {frase}? Por ejemplo, "
                     "renta, sueldos, luz, internet (sin contar la depreciación ni el pago de un crédito, que "
                     "te voy a preguntar aparte). (ejemplo: 8000)"
                 )
@@ -1986,13 +2065,14 @@ def _procesar_mensaje_interno(mensaje, numero):
         if contexto["esperando"] == "empc_costos_fijos":
             try:
                 costos_fijos = Decimal(mensaje.replace(",", ""))
+                frase = contexto.get("empc_frecuencia_frase", "en tu periodo elegido")
                 if costos_fijos < 0:
-                    return "Ese número no puede ser negativo 🙂 ¿Cuánto gastas en total en costos fijos en ese periodo?"
+                    return f"Ese número no puede ser negativo 🙂 ¿Cuánto gastas en total en costos fijos {frase}?"
                 contexto["empc_costos_fijos"] = costos_fijos
                 contexto["esperando"] = "empc_depreciacion"
                 return (
                     "5️⃣ ¿Tienes depreciación de maquinaria, equipo u otros bienes que uses en tu negocio "
-                    "durante este periodo? Es el desgaste de esos bienes con el tiempo. Si no tienes o no "
+                    f"({frase})? Es el desgaste de esos bienes con el tiempo. Si no tienes o no "
                     "llevas ese control, escribe 0. (ejemplo: 200)"
                 )
             except:
@@ -2018,7 +2098,12 @@ def _procesar_mensaje_interno(mensaje, numero):
                 return "Por favor, responde 1 (Sí) o 2 (No)."
             if texto_limpio in ["1", "sí", "si"]:
                 contexto["esperando"] = "empc_credito_monto"
-                return "¿Cuál es el monto del crédito? (ejemplo: 30000)"
+                frase = contexto.get("empc_frecuencia_frase", "en tu periodo elegido")
+                return (
+                    f"Como elegiste analizar tu negocio {frase}, el pago de este crédito también se va a "
+                    "calcular en ese mismo periodo, para que los números cuadren entre sí.\n\n"
+                    "¿Cuál es el monto del crédito? (ejemplo: 30000)"
+                )
             contexto["empc_credito_interes"] = Decimal("0")
             contexto["empc_credito_amortizacion"] = Decimal("0")
             contexto["esperando"] = "empc_tasa_impositiva"
@@ -2048,27 +2133,36 @@ def _procesar_mensaje_interno(mensaje, numero):
                     return "La tasa de interés no puede ser negativa. ¿Cuál es la tasa de interés ANUAL de ese crédito?"
                 contexto["empc_credito_tasa"] = tasa_credito
                 contexto["esperando"] = "empc_credito_plazo"
-                return "¿A cuántos meses es el plazo de ese crédito? (ejemplo: 36)"
+                return (
+                    "¿A cuántos años es el plazo de ese crédito? Puedes usar decimales si no es un número "
+                    "exacto de años (ejemplo: 3, o 2.5)"
+                )
             except:
                 return "Por favor, indica la tasa de interés como un número (ejemplo: 30)."
 
         if contexto["esperando"] == "empc_credito_plazo":
             try:
-                plazo_credito = int(Decimal(mensaje.replace(",", "")))
-                if plazo_credito <= 0:
-                    return "El plazo debe ser mayor a cero. ¿A cuántos meses es el plazo de ese crédito? (ejemplo: 36)"
+                anios_credito = Decimal(mensaje.replace(",", ""))
+                if anios_credito <= 0:
+                    return "El plazo debe ser mayor a cero. ¿A cuántos años es el plazo de ese crédito? (ejemplo: 3)"
+                periodos_por_anio = contexto["empc_periodos_por_anio"]
+                plazo_total, tasa_periodo = calcular_plazo_y_tasa_periodo(
+                    anios_credito, contexto["empc_credito_tasa"], periodos_por_anio
+                )
                 interes, amortizacion = calcular_pago_credito_primer_periodo(
-                    contexto["empc_credito_monto"], contexto["empc_credito_tasa"], plazo_credito
+                    contexto["empc_credito_monto"], tasa_periodo, plazo_total
                 )
                 contexto["empc_credito_interes"] = interes
                 contexto["empc_credito_amortizacion"] = amortizacion
                 contexto["esperando"] = "empc_tasa_impositiva"
                 return (
+                    f"Con eso, el crédito se pagaría en {plazo_total} pagos, siguiendo el mismo periodo que "
+                    "elegiste para tu análisis.\n\n"
                     "7️⃣ ¿Qué porcentaje aproximado de tu utilidad pagas de impuestos? Si no llevas ese "
                     "control o no estás seguro/a, puedes escribir 0. (ejemplo: 10)"
                 )
             except:
-                return "Por favor, indica el plazo en meses como un número entero (ejemplo: 36)."
+                return "Por favor, indica el plazo en años como un número (ejemplo: 3)."
 
         if contexto["esperando"] == "empc_tasa_impositiva":
             try:
@@ -2077,8 +2171,9 @@ def _procesar_mensaje_interno(mensaje, numero):
                     return "Ese porcentaje debe estar entre 0 y menos de 100. Si no aplica, escribe 0."
                 contexto["empc_tasa_impositiva"] = tasa_impositiva
                 contexto["esperando"] = "empc_utilidad_deseada"
+                frase = contexto.get("empc_frecuencia_frase", "en tu periodo elegido")
                 return (
-                    "8️⃣ ¿Cuánto te gustaría ganar de utilidad (ganancia) en ese periodo, además de cubrir "
+                    f"8️⃣ ¿Cuánto te gustaría ganar de utilidad (ganancia) {frase}, además de cubrir "
                     "tus costos? (ejemplo: 5000)"
                 )
             except:
@@ -2087,8 +2182,9 @@ def _procesar_mensaje_interno(mensaje, numero):
         if contexto["esperando"] == "empc_utilidad_deseada":
             try:
                 utilidad_deseada = Decimal(mensaje.replace(",", ""))
+                frase = contexto.get("empc_frecuencia_frase", "en tu periodo elegido")
                 if utilidad_deseada < 0:
-                    return "Ese número no puede ser negativo 🙂 ¿Cuánto te gustaría ganar de utilidad en ese periodo?"
+                    return f"Ese número no puede ser negativo 🙂 ¿Cuánto te gustaría ganar de utilidad {frase}?"
                 contexto["empc_utilidad_deseada"] = utilidad_deseada
                 precio_sugerido = calcular_precio_sugerido_emprendedor_completo(
                     contexto["empc_unidades"],
@@ -2105,7 +2201,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                 contexto["esperando"] = "empc_precio_prueba"
                 return (
                     f"💲 Con esos datos, para ganar ${utilidad_deseada:,.2f} vendiendo "
-                    f"{contexto['empc_unidades']:,.0f} unidades, necesitarías vender cada una en "
+                    f"{contexto['empc_unidades']:,.0f} unidades {frase}, necesitarías vender cada una en "
                     f"aproximadamente *${precio_sugerido:,.2f}*.\n\n"
                     "¿A qué precio tienes pensado vender realmente? Puedes usar este mismo precio sugerido "
                     f"(escribe {precio_sugerido:,.2f}) o probar otro número, para ver tu punto de equilibrio "
@@ -2137,6 +2233,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     contexto["empc_credito_interes"],
                     contexto["empc_tasa_impositiva"],
                     precio_prueba,
+                    contexto.get("empc_frecuencia_frase", "en tu periodo elegido"),
                 )
                 estado_usuario[numero] = {"esperando": "menu_emprendedor"}
                 return resultado + "\n\n" + mensaje_submenu_emprendedor
