@@ -10,7 +10,7 @@ import os
 import re
 import unicodedata
 from collections import deque
-from decimal import Decimal, getcontext, ROUND_HALF_UP
+from decimal import Decimal, getcontext, ROUND_HALF_UP, ROUND_CEILING
 from math import log
 import requests  # <-- AÑADIDO
 
@@ -552,6 +552,71 @@ def calcular_ahorro_jubilacion(meta, ahorro_actual, anios, tasa_anual_pct, perio
         return f"❌ Error al calcular: {e}"
 
 # =========================================
+# Herramientas para el emprendedor: precio de venta y punto de equilibrio
+# =========================================
+def calcular_precio_sugerido_emprendedor(unidades, costo_unitario, costos_fijos, utilidad_deseada):
+    """
+    Calculadora simplificada de precio de venta por costeo (costo más margen):
+    precio = costo por unidad + (costos fijos + utilidad deseada) / unidades.
+
+    Es una versión simplificada de un modelo de fijación de precios más completo
+    (que también podría incluir depreciación, financiamiento e impuestos); aquí
+    se omiten esos elementos a propósito para que la calculadora sea rápida de
+    usar por WhatsApp. Si el negocio tiene un préstamo, se le sugiere a la
+    persona incluir el pago mensual dentro de sus costos fijos.
+    """
+    unidades = Decimal(str(unidades))
+    costo_unitario = Decimal(str(costo_unitario))
+    costos_fijos = Decimal(str(costos_fijos))
+    utilidad_deseada = Decimal(str(utilidad_deseada))
+
+    precio_sugerido = (costo_unitario + (costos_fijos + utilidad_deseada) / unidades).quantize(Decimal("0.01"))
+    return precio_sugerido
+
+def calcular_resultado_precio_emprendedor(unidades, costo_unitario, costos_fijos, precio_elegido):
+    """
+    A partir de un precio de venta (sugerido o elegido por la persona), calcula
+    el punto de equilibrio en unidades y la utilidad estimada si vende la
+    cantidad de unidades que había planeado.
+    """
+    try:
+        unidades = Decimal(str(unidades))
+        costo_unitario = Decimal(str(costo_unitario))
+        costos_fijos = Decimal(str(costos_fijos))
+        precio_elegido = Decimal(str(precio_elegido))
+
+        margen_unitario = precio_elegido - costo_unitario
+        punto_equilibrio = (costos_fijos / margen_unitario).to_integral_value(rounding=ROUND_CEILING)
+        utilidad_estimada = (margen_unitario * unidades - costos_fijos).quantize(Decimal("0.01"))
+
+        if utilidad_estimada >= 0:
+            linea_utilidad = (
+                f"✅ Si vendes las {unidades:,.0f} unidades que planeaste a ${precio_elegido:,.2f} cada una, "
+                f"tendrías una utilidad estimada de ${utilidad_estimada:,.2f}."
+            )
+        else:
+            linea_utilidad = (
+                f"⚠️ Si vendes las {unidades:,.0f} unidades que planeaste a ${precio_elegido:,.2f} cada una, "
+                f"tendrías una pérdida estimada de ${abs(utilidad_estimada):,.2f}, porque no alcanzarías tu "
+                "punto de equilibrio."
+            )
+
+        return (
+            "📌 Resultado con el precio que elegiste:\n"
+            f"💲 Precio por unidad: ${precio_elegido:,.2f}\n"
+            f"🧮 Costo por unidad: ${costo_unitario:,.2f}\n"
+            f"📉 Costos fijos del periodo: ${costos_fijos:,.2f}\n\n"
+            f"⚖️ Punto de equilibrio: necesitas vender {punto_equilibrio:,.0f} unidades en el periodo solo "
+            "para no perder dinero (cubrir tus costos, sin ganar ni perder).\n"
+            f"{linea_utilidad}\n\n"
+            "🔍 *Nota:* Este cálculo es una guía general y simplificada (no incluye impuestos ni el efecto "
+            "de un préstamo, aunque si tienes uno puedes sumar su pago mensual a tus costos fijos). No "
+            "sustituye la asesoría de un contador."
+        )
+    except Exception as e:
+        return f"❌ Error al calcular: {e}"
+
+# =========================================
 # Menú principal
 # =========================================
 saludo_inicial = (
@@ -563,10 +628,11 @@ saludo_inicial = (
     "2️⃣ Crédito\n"
     "3️⃣ Inversión\n"
     "4️⃣ Jubilación\n"
-    "5️⃣ Género y finanzas\n"
-    "6️⃣ Evalúa tu salud financiera\n"
-    "7️⃣ Glosario de términos financieros\n"
-    "8️⃣ ¿Quiénes hicimos este bot?\n"
+    "5️⃣ Herramientas para el emprendedor\n"
+    "6️⃣ Género y finanzas\n"
+    "7️⃣ Evalúa tu salud financiera\n"
+    "8️⃣ Glosario de términos financieros\n"
+    "9️⃣ ¿Quiénes hicimos este bot?\n"
     "No te preocupes si no conoces todos estos términos, yo te voy guiando paso a paso 😊\n\n"
     "🔒 Este bot nunca te va a pedir contraseñas, NIP, CVV de tu tarjeta ni códigos de verificación. "
     "Si alguien más te los pide haciéndose pasar por este bot, no se los compartas."
@@ -611,6 +677,15 @@ mensaje_submenu_jubilacion = (
     "4️⃣ Aportaciones voluntarias: cómo aumentar tu ahorro para el retiro\n"
     "5️⃣ ¿Qué pasa si cambio de trabajo o dejo de cotizar?\n"
     "6️⃣ No he trabajado de forma formal, ¿aún así puedo ahorrar para mi retiro?\n\n"
+    "Escribe el número, o *menú* para regresar."
+)
+
+# =========================================
+# Herramientas para el emprendedor
+# =========================================
+mensaje_submenu_emprendedor = (
+    "🧰 *Herramientas para el emprendedor*\n\n"
+    "1️⃣ ¿A cómo debo vender mi producto o servicio?\n\n"
     "Escribe el número, o *menú* para regresar."
 )
 
@@ -1232,6 +1307,8 @@ def _procesar_mensaje_interno(mensaje, numero):
             "jubilacion_tiempo_numero", "jubilacion_tiempo_unidad",
             "jubilacion_frecuencia", "jubilacion_frecuencia_otro",
             "menu_salud", "salud_pregunta", "menu_genero",
+            "menu_emprendedor", "emprendedor_unidades", "emprendedor_costo_unitario",
+            "emprendedor_costos_fijos", "emprendedor_utilidad_deseada", "emprendedor_precio_prueba",
         ]:
             subflujo_critico = True
 
@@ -1259,22 +1336,29 @@ def _procesar_mensaje_interno(mensaje, numero):
             estado_usuario[numero] = {"esperando": "menu_jubilacion"}
             return mensaje_submenu_jubilacion
 
-        if texto_limpio in ["5", "género y finanzas", "genero y finanzas"]:
+        if texto_limpio in [
+            "5", "herramientas para el emprendedor", "herramientas para emprendedores",
+            "emprendedor", "emprendedores",
+        ]:
+            estado_usuario[numero] = {"esperando": "menu_emprendedor"}
+            return mensaje_submenu_emprendedor
+
+        if texto_limpio in ["6", "género y finanzas", "genero y finanzas"]:
             estado_usuario[numero] = {"esperando": "menu_genero"}
             return mensaje_submenu_genero
 
         if texto_limpio in [
-            "6", "evalúa tu salud financiera", "evalua tu salud financiera",
+            "7", "evalúa tu salud financiera", "evalua tu salud financiera",
             "evaluar mi salud financiera", "salud financiera",
         ]:
             estado_usuario[numero] = {"esperando": "menu_salud"}
             return mensaje_submenu_salud
 
-        if texto_limpio in ["7", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
+        if texto_limpio in ["8", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
             estado_usuario[numero] = {}
             return mensaje_glosario
 
-        if texto_limpio in ["8", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
+        if texto_limpio in ["9", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
             estado_usuario[numero] = {}
             return mensaje_creditos
 
@@ -1593,6 +1677,111 @@ def _procesar_mensaje_interno(mensaje, numero):
             ]:
                 return mensaje_genero_violencia_economica
             return "Por favor, elige una opción válida de esta sección, o escribe *menú* para regresar al inicio."
+
+        # --- Submenú: Herramientas para el emprendedor ---
+        if contexto["esperando"] == "menu_emprendedor":
+            if texto_limpio in ["menu", "menú"]:
+                estado_usuario[numero] = {}
+                return saludo_inicial
+            if texto_limpio == "1":
+                estado_usuario[numero] = {"esperando": "emprendedor_unidades"}
+                return (
+                    "🧰 Vamos a calcular a cómo te conviene vender tu producto o servicio, tu punto de "
+                    "equilibrio y la utilidad que tendrías.\n\n"
+                    "1️⃣ ¿Cuántas unidades (productos o servicios) esperas vender en el periodo que quieres "
+                    "analizar, por ejemplo en un mes? Escribe solo el número. (ejemplo: 100)"
+                )
+            return "Por favor, elige una opción válida de esta sección, o escribe *menú* para regresar al inicio."
+
+        # --- Herramientas para el emprendedor: flujo de precio y punto de equilibrio ---
+        if contexto["esperando"] == "emprendedor_unidades":
+            try:
+                unidades = Decimal(mensaje.replace(",", ""))
+                if unidades <= 0:
+                    return "Las unidades deben ser mayores a cero. ¿Cuántas unidades esperas vender? (ejemplo: 100)"
+                contexto["emprendedor_unidades"] = unidades
+                contexto["esperando"] = "emprendedor_costo_unitario"
+                return "2️⃣ ¿Cuánto te cuesta producir o comprar cada unidad? (ejemplo: 50)"
+            except:
+                return "Por favor, indica las unidades como un número (ejemplo: 100)."
+
+        if contexto["esperando"] == "emprendedor_costo_unitario":
+            try:
+                costo_unitario = Decimal(mensaje.replace(",", ""))
+                if costo_unitario < 0:
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto te cuesta producir o comprar cada unidad?"
+                contexto["emprendedor_costo_unitario"] = costo_unitario
+                contexto["esperando"] = "emprendedor_costos_fijos"
+                return (
+                    "3️⃣ ¿Cuánto gastas en total en costos fijos durante ese mismo periodo? Por ejemplo, "
+                    "renta, sueldos, luz, internet (sin contar lo que gastas por cada unidad que vendes). "
+                    "Si tienes un préstamo relacionado a tu negocio, puedes incluir aquí el pago mensual. "
+                    "(ejemplo: 8000)"
+                )
+            except:
+                return "Por favor, indica el costo por unidad como un número (ejemplo: 50)."
+
+        if contexto["esperando"] == "emprendedor_costos_fijos":
+            try:
+                costos_fijos = Decimal(mensaje.replace(",", ""))
+                if costos_fijos < 0:
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto gastas en total en costos fijos en ese periodo?"
+                contexto["emprendedor_costos_fijos"] = costos_fijos
+                contexto["esperando"] = "emprendedor_utilidad_deseada"
+                return (
+                    "4️⃣ ¿Cuánto te gustaría ganar de utilidad (ganancia) en ese periodo, además de cubrir "
+                    "tus costos? (ejemplo: 5000)"
+                )
+            except:
+                return "Por favor, indica tus costos fijos como un número (ejemplo: 8000)."
+
+        if contexto["esperando"] == "emprendedor_utilidad_deseada":
+            try:
+                utilidad_deseada = Decimal(mensaje.replace(",", ""))
+                if utilidad_deseada < 0:
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto te gustaría ganar de utilidad en ese periodo?"
+                contexto["emprendedor_utilidad_deseada"] = utilidad_deseada
+                precio_sugerido = calcular_precio_sugerido_emprendedor(
+                    contexto["emprendedor_unidades"],
+                    contexto["emprendedor_costo_unitario"],
+                    contexto["emprendedor_costos_fijos"],
+                    utilidad_deseada,
+                )
+                contexto["emprendedor_precio_sugerido"] = precio_sugerido
+                contexto["esperando"] = "emprendedor_precio_prueba"
+                return (
+                    f"💲 Con esos datos, para ganar ${utilidad_deseada:,.2f} vendiendo "
+                    f"{contexto['emprendedor_unidades']:,.0f} unidades, necesitarías vender cada una en "
+                    f"aproximadamente *${precio_sugerido:,.2f}*.\n\n"
+                    "¿A qué precio tienes pensado vender realmente? Puedes usar este mismo precio sugerido "
+                    f"(escribe {precio_sugerido:,.2f}) o probar otro número, para ver tu punto de equilibrio "
+                    "y la utilidad que tendrías."
+                )
+            except:
+                return "Por favor, indica la utilidad deseada como un número (ejemplo: 5000)."
+
+        if contexto["esperando"] == "emprendedor_precio_prueba":
+            try:
+                precio_prueba = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if precio_prueba <= 0:
+                    return "El precio debe ser mayor a cero. ¿A qué precio tienes pensado vender cada unidad?"
+                costo_unitario = contexto["emprendedor_costo_unitario"]
+                if precio_prueba <= costo_unitario:
+                    return (
+                        f"⚠️ A ${precio_prueba:,.2f} por unidad, no alcanzas ni a cubrir tu costo por unidad "
+                        f"(${costo_unitario:,.2f}), así que entre más vendas, más perderías. Prueba con un "
+                        f"precio mayor a ${costo_unitario:,.2f}."
+                    )
+                resultado = calcular_resultado_precio_emprendedor(
+                    contexto["emprendedor_unidades"],
+                    costo_unitario,
+                    contexto["emprendedor_costos_fijos"],
+                    precio_prueba,
+                )
+                estado_usuario[numero] = {"esperando": "menu_emprendedor"}
+                return resultado + "\n\n" + mensaje_submenu_emprendedor
+            except:
+                return "Por favor, indica el precio como un número (ejemplo: 60)."
 
         # --- Submenú: Crédito ---
         if contexto["esperando"] == "menu_credito":
