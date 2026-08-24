@@ -12,7 +12,7 @@ import unicodedata
 from collections import deque
 from decimal import Decimal, getcontext, ROUND_HALF_UP, ROUND_CEILING
 from math import log
-import requests  # <-- AÑADIDO
+import requests
 
 # Quita signos de puntuación y espacios sueltos al inicio/final de un mensaje
 # (¡Hola!, Hola., ¿menú? etc. deben reconocerse igual que "hola").
@@ -40,21 +40,16 @@ def privacidad():
 
 estado_usuario = {}
 
-# Guarda el último mensaje que el bot le envió a cada número, para poder
-# explicarlo "más fácil" si la persona lo pide (ver es_peticion_explicar_mas_facil
-# y _explicar_mas_facil más abajo).
+# Último mensaje que el bot envió a cada número, para poder "explicarlo más
+# fácil" si lo piden (ver es_peticion_explicar_mas_facil / _explicar_mas_facil).
 _ultimo_mensaje_bot = {}
 
 # =========================================
 # Protección contra mensajes duplicados
 # =========================================
-# WhatsApp reenvía el mismo mensaje (mismo "id") si no recibe una respuesta
-# 200 de nuestro webhook lo suficientemente rápido. Esto pasa sobre todo
-# cuando el servicio estuvo inactivo (por ejemplo, en el plan gratuito de
-# Render, que "duerme" tras un rato sin uso) y tarda varios segundos en
-# despertar para atender la primera petición. Sin esta protección, ese
-# reenvío hace que el bot procese el mismo mensaje dos veces y responda
-# el menú (o cualquier otra respuesta) por duplicado.
+# WhatsApp reenvía el mismo mensaje si no recibimos su respuesta 200 rápido
+# (típico cuando el plan gratuito de Render "despierta" tras estar dormido).
+# Sin esto, el bot respondería dos veces al mismo mensaje.
 _IDS_PROCESADOS_MAXLEN = 500
 _ids_mensajes_procesados = set()
 _orden_ids_mensajes_procesados = deque()
@@ -922,12 +917,9 @@ mensaje_genero_violencia_economica = (
 # =========================================
 # Evalúa tu salud financiera
 # =========================================
-# Basado en el instrumento "Semáforo de Salud Financiera" de la UABC.
-# Cada dimensión se evalúa por separado (la persona elige cuál/es), pregunta
-# por pregunta, con respuestas en escala de 1 a 5. Al final de cada
-# dimensión se suman los puntos y se ubica el resultado en su rango
-# correspondiente (🔴/🟡/🟢), con una recomendación conectada al resto del
-# bot.
+# Basado en el "Semáforo de Salud Financiera" de la UABC: cada dimensión se
+# evalúa pregunta por pregunta (escala 1-5) y el puntaje final se ubica en
+# un rango 🔴/🟡/🟢, con una recomendación conectada al resto del bot.
 mensaje_submenu_salud = (
     "🚦 *Evalúa tu salud financiera*\n\n"
     "Vamos a ver qué tan saludables están tus finanzas en 4 dimensiones:\n"
@@ -947,9 +939,8 @@ mensaje_submenu_salud = (
     "Escribe el número, o *menú* para regresar."
 )
 
-# Versión corta del submenú, usada como pie después de mostrar el resultado de
-# una dimensión: mantiene las opciones de navegación disponibles (evaluar otra
-# dimensión o volver al inicio) sin repetir toda la explicación de arriba.
+# Versión corta del submenú: pie tras el resultado de una dimensión, sin
+# repetir toda la explicación de arriba.
 mensaje_salud_cierre = (
     "¿Quieres evaluar otra dimensión?\n"
     "1️⃣ Resiliencia\n"
@@ -1389,7 +1380,8 @@ mensaje_creditos = (
     "poca o mucha experiencia previa con temas de dinero.\n"
     "________________________________________\n"
     "✍️ Dra. Ana Jazmín Sandoval Sánchez\n"
-    "Autora y creadora de este bot.\n"
+    "Autora y creadora de este bot, y Líder del Cuerpo Académico Gestión Disruptiva, Cooperación e "
+    "Inclusión en Organizaciones y Comunidades.\n"
     "________________________________________\n"
     "🌟 Dra. Sósima Carrillo\n"
     "Coautora de este proyecto, Líder del Cuerpo Académico Gestión Financiera y Administrativa de las "
@@ -1397,10 +1389,10 @@ mensaje_creditos = (
     "inspiración fundamental para que este proyecto exista.\n"
     "________________________________________\n"
     "🤝 Dras. Yésica Lizbet Benítez Niebla, Paulina Villalobos Torres y Zyanya María Villa Zamorano\n"
-    "Coautoras de este proyecto, integrantes del Cuerpo Académico Gestión Disruptiva, Cooperación e "
-    "Inclusión en Organizaciones y Comunidades. Su entusiasmo, compromiso y empeño en construir "
-    "siempre ideas disruptivas y diferentes son parte esencial de la misión que compartimos: "
-    "contribuir, desde nuestro trabajo, a cambiar al mundo.\n"
+    "Coautoras de este proyecto e integrantes del Cuerpo Académico Gestión Disruptiva, Cooperación e "
+    "Inclusión en Organizaciones y Comunidades. Su entusiasmo y compromiso por impulsar siempre ideas "
+    "disruptivas y diferentes son parte esencial de la misión que compartimos: contribuir, desde "
+    "nuestro trabajo, a cambiar al mundo.\n"
     "________________________________________\n"
     "Gracias por confiar en este proyecto 💚\n"
     "Escribe *menú* para volver."
@@ -1448,7 +1440,8 @@ def enviar_mensaje(numero, texto):
 def _procesar_mensaje_interno(mensaje, numero):
     texto_limpio = _BORDE_PUNTUACION_RE.sub('', mensaje).lower()
 
-    # Evitar menú si estamos en pasos críticos
+    # Estados donde una respuesta numérica (ej. "1", "36") no debe confundirse
+    # con los accesos directos del menú principal.
     subflujo_critico = False
     if numero in estado_usuario:
         esperando = estado_usuario[numero].get("esperando")
@@ -1457,16 +1450,10 @@ def _procesar_mensaje_interno(mensaje, numero):
             "abono_extra1", "abono_extra2",
             "riesgo", "subopcion_prestamo",
             "submenu_despues_de_maximo",
-            # Pasos nuevos de tasa anual / años / frecuencia de pago:
-            # sus respuestas (números del 1 al 8, o años como 1-8) no deben
-            # confundirse con los accesos directos del menú principal.
             "tasa_anual_credito", "anios_credito", "frecuencia_credito", "frecuencia_otro_credito",
             "tasa_anual2", "anios2", "frecuencia2", "frecuencia_otro2",
             "tasa_anual_simular", "anios_simular", "frecuencia_simular", "frecuencia_otro_simular",
             "tasa_anual_deseada", "anios_deseado", "frecuencia_deseada", "frecuencia_otro_deseada",
-            # Submenús de la nueva estructura (Ahorro / Crédito) y pasos de la
-            # calculadora de meta de ahorro: sus respuestas numéricas tampoco
-            # deben confundirse con los accesos directos del menú principal.
             "menu_ahorro", "menu_credito", "menu_inversion", "menu_jubilacion",
             "ahorro_meta", "ahorro_inicial", "ahorro_tiempo_numero", "ahorro_tiempo_unidad",
             "ahorro_frecuencia", "ahorro_frecuencia_otro",
@@ -1486,11 +1473,8 @@ def _procesar_mensaje_interno(mensaje, numero):
         ]:
             subflujo_critico = True
 
-    # "menú" siempre debe funcionar como salida de emergencia, incluso en medio
-    # de un subflujo crítico (por ejemplo, a la mitad de una calculadora). Ahí
-    # solo protegemos los números 1-9 y otras palabras clave del menú principal
-    # (para no confundirlos con datos que la persona esté ingresando), pero la
-    # palabra "menú" en sí nunca es un dato válido dentro de ningún subflujo.
+    # "menú" es la salida de emergencia: funciona incluso en medio de un
+    # subflujo crítico, porque nunca es un dato válido que se esté pidiendo.
     if texto_limpio in ["menu", "menú"]:
         estado_usuario[numero] = {}
         return saludo_inicial
@@ -2832,14 +2816,13 @@ def _procesar_mensaje_interno(mensaje, numero):
             except:
                 return "Por favor, escribe solo el número del pago (ejemplo: 250)."
 
-       # PRIMER PASO: guardamos num_pagos y pedimos periodos anuales
+        # PRIMER PASO: guardamos num_pagos y pedimos periodos anuales
         if contexto["esperando"] == "numero_pagos_tienda":
             try:
-                # Convertimos la entrada a entero
                 numero_pagos = int(mensaje.strip())
                 contexto["numero_pagos_tienda"] = numero_pagos
 
-                # Cambiamos a un nuevo estado donde preguntamos cuántos periodos hay en 1 año
+                # Preguntamos cuántos periodos hay en 1 año, para calcular la tasa anual real
                 contexto["esperando"] = "pedir_periodos_anuales_tienda"
                 return (
                     "Para calcular la tasa anual real, necesito saber cuántos periodos hay en 1 año.\n"
@@ -2857,7 +2840,7 @@ def _procesar_mensaje_interno(mensaje, numero):
         if contexto["esperando"] == "pedir_periodos_anuales_tienda":
             try:
                 periodos_anuales = int(mensaje.strip())
-                contexto["periodos_anuales"] = periodos_anuales  # ✅ Se guarda en el contexto
+                contexto["periodos_anuales"] = periodos_anuales
 
                 mensaje_resultado = calcular_costo_credito_tienda(
                     contexto["precio_contado"],
@@ -3106,10 +3089,8 @@ def _procesar_mensaje_interno(mensaje, numero):
                 estado_usuario.pop(numero)
                 return "Entiendo. Escribe *menú*."
 
-    # Si nada coincide y no hay ninguna conversación activa con este número
-    # (es la primera vez que escribe, o ya terminó una consulta anterior),
-    # le damos la bienvenida sin importar qué haya escrito exactamente,
-    # así no depende de que adivine la palabra "hola" para empezar.
+    # Sin conversación activa (primera vez, o ya terminó una consulta): damos
+    # la bienvenida sin depender de que adivine la palabra "hola".
     if numero not in estado_usuario:
         estado_usuario[numero] = {}
         return saludo_inicial
@@ -3121,8 +3102,8 @@ def _procesar_mensaje_interno(mensaje, numero):
     )
 
 # =========================================
-# "Explícamelo más fácil": simplifica los términos técnicos de la
-# última respuesta del bot, sin interrumpir la conversación en curso.
+# "Explícamelo más fácil": simplifica los términos técnicos de la última
+# respuesta del bot.
 # =========================================
 def _sin_acentos(texto):
     return ''.join(
@@ -3143,8 +3124,7 @@ def es_peticion_explicar_mas_facil(texto_limpio):
 def _explicar_mas_facil(numero):
     ultimo = _ultimo_mensaje_bot.get(numero)
     if ultimo is None:
-        # Primera vez que este número nos escribe: todavía no le hemos
-        # dicho nada que explicarle más fácil, así que lo recibimos normal.
+        # Primera vez que escribe: no hay nada que explicarle más fácil todavía.
         estado_usuario[numero] = {}
         return saludo_inicial
     terminos = buscar_terminos_glosario(ultimo)
@@ -3190,7 +3170,7 @@ def webhook():
     if request.method == "POST":
         data = request.get_json()
         print("📩 Webhook recibido:")
-        print(json.dumps(data, indent=2))  # 👈 muestra todo bonito en logs
+        print(json.dumps(data, indent=2))
 
         try:
             mensaje = data['entry'][0]['changes'][0]['value']['messages'][0]['text']['body']
@@ -3200,10 +3180,8 @@ def webhook():
             print("⚠️ No se pudo procesar el mensaje:", e)
             return "ok", 200
 
-        # WhatsApp puede reenviar el mismo mensaje (mismo id) si no le
-        # respondemos rápido, por ejemplo justo cuando el servicio estaba
-        # dormido y está despertando. Si ya procesamos este id, lo
-        # ignoramos para no responder por duplicado.
+        # Evita responder dos veces al mismo mensaje reenviado (ver protección
+        # contra mensajes duplicados, arriba).
         if ya_fue_procesado(message_id):
             print(f"⚠️ Mensaje duplicado ignorado (id={message_id})")
             return {"status": "duplicado_ignorado"}, 200
