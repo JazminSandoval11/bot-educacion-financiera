@@ -616,6 +616,147 @@ def calcular_resultado_precio_emprendedor(unidades, costo_unitario, costos_fijos
     except Exception as e:
         return f"❌ Error al calcular: {e}"
 
+# --- Calculadora completa: incluye crédito, depreciación e impuestos ---
+def calcular_pago_credito_primer_periodo(capital, tasa_interes_anual_pct, plazo_meses):
+    """
+    Dado el monto de un crédito, su tasa de interés ANUAL (en %) y su plazo en
+    meses, calcula el interés y el pago a capital del PRIMER mes usando el
+    sistema de pagos fijos (igual que en la calculadora de Crédito). Solo se
+    necesita el primer periodo porque es lo que usa la fórmula de precio.
+    Si no hay crédito (capital 0), regresa (0, 0).
+    """
+    capital = Decimal(str(capital))
+    plazo_meses = int(plazo_meses)
+
+    if capital <= 0 or plazo_meses <= 0:
+        return Decimal("0"), Decimal("0")
+
+    tasa_mensual = (Decimal(str(tasa_interes_anual_pct)) / Decimal("100")) / Decimal("12")
+
+    if tasa_mensual == 0:
+        pago = capital / Decimal(plazo_meses)
+    else:
+        pago = (capital * tasa_mensual) / (Decimal("1") - (Decimal("1") + tasa_mensual) ** Decimal(-plazo_meses))
+
+    interes = (capital * tasa_mensual).quantize(Decimal("0.01"))
+    amortizacion_capital = (pago - interes).quantize(Decimal("0.01"))
+    return interes, amortizacion_capital
+
+def calcular_precio_sugerido_emprendedor_completo(
+    unidades, costo_unitario, pct_variable, costos_fijos, depreciacion,
+    interes, amortizacion_capital, tasa_impositiva, utilidad_deseada,
+):
+    """
+    Versión completa de la calculadora de precio por costeo, que además de lo
+    que ya considera la versión rápida (unidades, costo por unidad, costos
+    fijos y utilidad deseada), incorpora costos variables en %, depreciación,
+    el efecto de un crédito del negocio (intereses y pago a capital) y la
+    tasa de impuestos sobre la utilidad. Cuando el pago a capital del crédito
+    supera a la depreciación en el periodo, se ajusta el precio para que,
+    después de impuestos, siga alcanzando la utilidad deseada (porque el pago
+    a capital no es deducible de impuestos, a diferencia de la depreciación).
+    """
+    unidades = Decimal(str(unidades))
+    costo_unitario = Decimal(str(costo_unitario))
+    pct_variable_frac = Decimal(str(pct_variable)) / Decimal("100")
+    costos_fijos = Decimal(str(costos_fijos))
+    depreciacion = Decimal(str(depreciacion))
+    interes = Decimal(str(interes))
+    amortizacion_capital = Decimal(str(amortizacion_capital))
+    tasa_impositiva_frac = Decimal(str(tasa_impositiva)) / Decimal("100")
+    utilidad_deseada = Decimal(str(utilidad_deseada))
+
+    selector = utilidad_deseada - depreciacion + amortizacion_capital
+    if selector <= 0 or tasa_impositiva_frac >= 1:
+        numerador_utilidad = utilidad_deseada
+    else:
+        numerador_utilidad = utilidad_deseada / (Decimal("1") - tasa_impositiva_frac)
+
+    precio = (
+        ((numerador_utilidad + costos_fijos + interes + depreciacion) / unidades) + costo_unitario
+    ) / (Decimal("1") - pct_variable_frac)
+    return precio.quantize(Decimal("0.01"))
+
+def calcular_resultado_precio_emprendedor_completo(
+    unidades, costo_unitario, pct_variable, costos_fijos, depreciacion,
+    interes, tasa_impositiva, precio_elegido,
+):
+    """
+    A partir de un precio elegido, calcula el punto de equilibrio y la
+    utilidad NETA (ya con impuestos) si se venden las unidades planeadas,
+    mostrando el desglose completo de ingresos, costos y utilidad.
+    """
+    try:
+        unidades = Decimal(str(unidades))
+        costo_unitario = Decimal(str(costo_unitario))
+        pct_variable_frac = Decimal(str(pct_variable)) / Decimal("100")
+        costos_fijos = Decimal(str(costos_fijos))
+        depreciacion = Decimal(str(depreciacion))
+        interes = Decimal(str(interes))
+        tasa_impositiva_frac = Decimal(str(tasa_impositiva)) / Decimal("100")
+        precio_elegido = Decimal(str(precio_elegido))
+
+        margen_unitario = precio_elegido * (Decimal("1") - pct_variable_frac) - costo_unitario
+        punto_equilibrio = (
+            (costos_fijos + interes + depreciacion) / margen_unitario
+        ).to_integral_value(rounding=ROUND_CEILING)
+
+        ingresos = precio_elegido * unidades
+        costos_variables_totales = (costo_unitario * unidades) + (pct_variable_frac * ingresos)
+        utilidad_antes_int_imp = ingresos - costos_variables_totales - costos_fijos - depreciacion
+        utilidad_antes_impuestos = utilidad_antes_int_imp - interes
+        impuestos = (
+            (utilidad_antes_impuestos * tasa_impositiva_frac) if utilidad_antes_impuestos > 0 else Decimal("0")
+        )
+        utilidad_neta = (utilidad_antes_impuestos - impuestos).quantize(Decimal("0.01"))
+
+        if utilidad_neta >= 0:
+            linea_utilidad = f"✅ Utilidad neta estimada (ya con impuestos): ${utilidad_neta:,.2f}"
+        else:
+            linea_utilidad = f"⚠️ Pérdida neta estimada: ${abs(utilidad_neta):,.2f}"
+
+        return (
+            "📌 Resultado con el precio que elegiste:\n"
+            f"💲 Precio por unidad: ${precio_elegido:,.2f}\n"
+            f"💵 Ingresos totales ({unidades:,.0f} unidades): ${ingresos:,.2f}\n"
+            f"🧮 Costos variables (costo por unidad + % sobre ventas): ${costos_variables_totales:,.2f}\n"
+            f"📉 Costos fijos: ${costos_fijos:,.2f}\n"
+            f"🏭 Depreciación: ${depreciacion:,.2f}\n"
+            f"🏦 Intereses del crédito: ${interes:,.2f}\n"
+            f"🧾 Impuestos: ${impuestos.quantize(Decimal('0.01')):,.2f}\n\n"
+            f"⚖️ Punto de equilibrio: necesitas vender {punto_equilibrio:,.0f} unidades en el periodo solo "
+            "para no perder dinero.\n"
+            f"{linea_utilidad}\n\n"
+            "🔍 *Nota:* Este cálculo es una guía general. No sustituye la asesoría de un contador, sobre "
+            "todo para el manejo correcto de tus impuestos."
+        )
+    except Exception as e:
+        return f"❌ Error al calcular: {e}"
+
+mensaje_emprendedor_tips = (
+    "💡 *Tips financieros para tu negocio*\n\n"
+    "Aquí van algunas ideas que le ayudan a cualquier negocio pequeño a mantenerse más sano financieramente:\n"
+    "________________________________________\n"
+    "✅ 1. Separa el dinero de tu negocio del dinero personal\n"
+    "📌 Aunque tu negocio sea informal, procura tener una cuenta o al menos un espacio distinto para ese "
+    "dinero.\n"
+    "💡 Así vas a saber de verdad si tu negocio gana dinero o no, sin mezclarlo con tus gastos personales.\n"
+    "________________________________________\n"
+    "✅ 2. Lleva un registro simple de lo que entra y lo que sale\n"
+    "📌 No necesitas un sistema complicado, una libreta o una hoja de cálculo básica es un buen comienzo.\n"
+    "💡 Sin ese registro, es muy fácil pensar que tu negocio va mejor (o peor) de lo que realmente va.\n"
+    "________________________________________\n"
+    "✅ 3. Construye un colchón de flujo de efectivo para tu negocio\n"
+    "📌 Además de tu fondo de emergencia personal, tu negocio también necesita uno: para meses lentos, "
+    "imprevistos, o para aprovechar oportunidades de comprar más inventario.\n"
+    "💡 Un negocio se puede quedar sin dinero en caja aunque esté ganando en papel.\n"
+    "________________________________________\n"
+    "✅ 4. No confundas utilidad con tener dinero disponible\n"
+    "📌 Puedes tener ganancias en papel y aun así no tener efectivo en la mano, por ejemplo si vendes a "
+    "crédito, tienes mucho inventario guardado, o estás pagando un préstamo.\n"
+    "💡 Revisa ambas cosas por separado: cuánto ganas y cuánto dinero tienes realmente disponible.\n\n"
+)
+
 # =========================================
 # Menú principal
 # =========================================
@@ -685,7 +826,9 @@ mensaje_submenu_jubilacion = (
 # =========================================
 mensaje_submenu_emprendedor = (
     "🧰 *Herramientas para el emprendedor*\n\n"
-    "1️⃣ ¿A cómo debo vender mi producto o servicio?\n\n"
+    "1️⃣ ¿A cuánto debo vender? (calculadora rápida)\n"
+    "2️⃣ ¿A cuánto debo vender? (calculadora completa, con crédito, depreciación e impuestos)\n"
+    "3️⃣ Tips financieros para tu negocio\n\n"
     "Escribe el número, o *menú* para regresar."
 )
 
@@ -1309,6 +1452,9 @@ def _procesar_mensaje_interno(mensaje, numero):
             "menu_salud", "salud_pregunta", "menu_genero",
             "menu_emprendedor", "emprendedor_unidades", "emprendedor_costo_unitario",
             "emprendedor_costos_fijos", "emprendedor_utilidad_deseada", "emprendedor_precio_prueba",
+            "empc_unidades", "empc_costo_unitario", "empc_pct_variable", "empc_costos_fijos",
+            "empc_depreciacion", "empc_tiene_credito", "empc_credito_monto", "empc_credito_tasa",
+            "empc_credito_plazo", "empc_tasa_impositiva", "empc_utilidad_deseada", "empc_precio_prueba",
         ]:
             subflujo_critico = True
 
@@ -1686,11 +1832,22 @@ def _procesar_mensaje_interno(mensaje, numero):
             if texto_limpio == "1":
                 estado_usuario[numero] = {"esperando": "emprendedor_unidades"}
                 return (
-                    "🧰 Vamos a calcular a cómo te conviene vender tu producto o servicio, tu punto de "
+                    "🧰 Vamos a calcular a cuánto te conviene vender tu producto o servicio, tu punto de "
                     "equilibrio y la utilidad que tendrías.\n\n"
                     "1️⃣ ¿Cuántas unidades (productos o servicios) esperas vender en el periodo que quieres "
                     "analizar, por ejemplo en un mes? Escribe solo el número. (ejemplo: 100)"
                 )
+            if texto_limpio == "2":
+                estado_usuario[numero] = {"esperando": "empc_unidades"}
+                return (
+                    "🧰 Esta es la calculadora completa: vamos a incluir también costos variables en %, "
+                    "depreciación, un posible crédito del negocio, e impuestos. Son varias preguntas, pero "
+                    "el resultado es más preciso.\n\n"
+                    "1️⃣ ¿Cuántas unidades (productos o servicios) esperas vender en el periodo que quieres "
+                    "analizar, por ejemplo en un mes? Escribe solo el número. (ejemplo: 100)"
+                )
+            if texto_limpio in ["3", "tips financieros para tu negocio", "tips financieros"]:
+                return mensaje_emprendedor_tips + "\n" + mensaje_submenu_emprendedor
             return "Por favor, elige una opción válida de esta sección, o escribe *menú* para regresar al inicio."
 
         # --- Herramientas para el emprendedor: flujo de precio y punto de equilibrio ---
@@ -1776,6 +1933,209 @@ def _procesar_mensaje_interno(mensaje, numero):
                     contexto["emprendedor_unidades"],
                     costo_unitario,
                     contexto["emprendedor_costos_fijos"],
+                    precio_prueba,
+                )
+                estado_usuario[numero] = {"esperando": "menu_emprendedor"}
+                return resultado + "\n\n" + mensaje_submenu_emprendedor
+            except:
+                return "Por favor, indica el precio como un número (ejemplo: 60)."
+
+        # --- Herramientas para el emprendedor: calculadora completa ---
+        if contexto["esperando"] == "empc_unidades":
+            try:
+                unidades = Decimal(mensaje.replace(",", ""))
+                if unidades <= 0:
+                    return "Las unidades deben ser mayores a cero. ¿Cuántas unidades esperas vender? (ejemplo: 100)"
+                contexto["empc_unidades"] = unidades
+                contexto["esperando"] = "empc_costo_unitario"
+                return "2️⃣ ¿Cuánto te cuesta producir o comprar cada unidad? (ejemplo: 50)"
+            except:
+                return "Por favor, indica las unidades como un número (ejemplo: 100)."
+
+        if contexto["esperando"] == "empc_costo_unitario":
+            try:
+                costo_unitario = Decimal(mensaje.replace(",", ""))
+                if costo_unitario < 0:
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto te cuesta producir o comprar cada unidad?"
+                contexto["empc_costo_unitario"] = costo_unitario
+                contexto["esperando"] = "empc_pct_variable"
+                return (
+                    "3️⃣ ¿Tienes algún costo que se calcule como % de tus ventas (no por unidad)? Por "
+                    "ejemplo, una comisión bancaria por cobrar con tarjeta, la comisión de una plataforma "
+                    "donde vendes, o una cuota de un colectivo o bazar. Si no aplica, escribe 0. "
+                    "(ejemplo: 3, si es 3%)"
+                )
+            except:
+                return "Por favor, indica el costo por unidad como un número (ejemplo: 50)."
+
+        if contexto["esperando"] == "empc_pct_variable":
+            try:
+                pct_variable = Decimal(mensaje.replace(",", "").replace("%", ""))
+                if pct_variable < 0 or pct_variable >= 100:
+                    return "Ese porcentaje debe estar entre 0 y menos de 100. Si no aplica, escribe 0."
+                contexto["empc_pct_variable"] = pct_variable
+                contexto["esperando"] = "empc_costos_fijos"
+                return (
+                    "4️⃣ ¿Cuánto gastas en total en costos fijos durante ese mismo periodo? Por ejemplo, "
+                    "renta, sueldos, luz, internet (sin contar la depreciación ni el pago de un crédito, que "
+                    "te voy a preguntar aparte). (ejemplo: 8000)"
+                )
+            except:
+                return "Por favor, indica el porcentaje como un número (ejemplo: 3, o 0 si no aplica)."
+
+        if contexto["esperando"] == "empc_costos_fijos":
+            try:
+                costos_fijos = Decimal(mensaje.replace(",", ""))
+                if costos_fijos < 0:
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto gastas en total en costos fijos en ese periodo?"
+                contexto["empc_costos_fijos"] = costos_fijos
+                contexto["esperando"] = "empc_depreciacion"
+                return (
+                    "5️⃣ ¿Tienes depreciación de maquinaria, equipo u otros bienes que uses en tu negocio "
+                    "durante este periodo? Es el desgaste de esos bienes con el tiempo. Si no tienes o no "
+                    "llevas ese control, escribe 0. (ejemplo: 200)"
+                )
+            except:
+                return "Por favor, indica tus costos fijos como un número (ejemplo: 8000)."
+
+        if contexto["esperando"] == "empc_depreciacion":
+            try:
+                depreciacion = Decimal(mensaje.replace(",", ""))
+                if depreciacion < 0:
+                    return "Ese número no puede ser negativo 🙂 Si no tienes depreciación que considerar, escribe 0."
+                contexto["empc_depreciacion"] = depreciacion
+                contexto["esperando"] = "empc_tiene_credito"
+                return (
+                    "6️⃣ ¿Tienes un crédito o préstamo relacionado con tu negocio?\n"
+                    "1️⃣ Sí\n"
+                    "2️⃣ No"
+                )
+            except:
+                return "Por favor, indica la depreciación como un número (ejemplo: 200, o 0 si no aplica)."
+
+        if contexto["esperando"] == "empc_tiene_credito":
+            if texto_limpio not in ["1", "2", "sí", "si", "no"]:
+                return "Por favor, responde 1 (Sí) o 2 (No)."
+            if texto_limpio in ["1", "sí", "si"]:
+                contexto["esperando"] = "empc_credito_monto"
+                return "¿Cuál es el monto del crédito? (ejemplo: 30000)"
+            contexto["empc_credito_interes"] = Decimal("0")
+            contexto["empc_credito_amortizacion"] = Decimal("0")
+            contexto["esperando"] = "empc_tasa_impositiva"
+            return (
+                "7️⃣ ¿Qué porcentaje aproximado de tu utilidad pagas de impuestos? Si no llevas ese control "
+                "o no estás seguro/a, puedes escribir 0. (ejemplo: 10)"
+            )
+
+        if contexto["esperando"] == "empc_credito_monto":
+            try:
+                monto_credito = Decimal(mensaje.replace(",", ""))
+                if monto_credito <= 0:
+                    return "El monto del crédito debe ser mayor a cero. ¿Cuál es el monto del crédito? (ejemplo: 30000)"
+                contexto["empc_credito_monto"] = monto_credito
+                contexto["esperando"] = "empc_credito_tasa"
+                return (
+                    "¿Cuál es la tasa de interés ANUAL de ese crédito? (ejemplo: si te dijeron 30% anual, "
+                    "solo escribe 30)"
+                )
+            except:
+                return "Por favor, indica el monto del crédito como un número (ejemplo: 30000)."
+
+        if contexto["esperando"] == "empc_credito_tasa":
+            try:
+                tasa_credito = Decimal(mensaje.replace(",", "").replace("%", ""))
+                if tasa_credito < 0:
+                    return "La tasa de interés no puede ser negativa. ¿Cuál es la tasa de interés ANUAL de ese crédito?"
+                contexto["empc_credito_tasa"] = tasa_credito
+                contexto["esperando"] = "empc_credito_plazo"
+                return "¿A cuántos meses es el plazo de ese crédito? (ejemplo: 36)"
+            except:
+                return "Por favor, indica la tasa de interés como un número (ejemplo: 30)."
+
+        if contexto["esperando"] == "empc_credito_plazo":
+            try:
+                plazo_credito = int(Decimal(mensaje.replace(",", "")))
+                if plazo_credito <= 0:
+                    return "El plazo debe ser mayor a cero. ¿A cuántos meses es el plazo de ese crédito? (ejemplo: 36)"
+                interes, amortizacion = calcular_pago_credito_primer_periodo(
+                    contexto["empc_credito_monto"], contexto["empc_credito_tasa"], plazo_credito
+                )
+                contexto["empc_credito_interes"] = interes
+                contexto["empc_credito_amortizacion"] = amortizacion
+                contexto["esperando"] = "empc_tasa_impositiva"
+                return (
+                    "7️⃣ ¿Qué porcentaje aproximado de tu utilidad pagas de impuestos? Si no llevas ese "
+                    "control o no estás seguro/a, puedes escribir 0. (ejemplo: 10)"
+                )
+            except:
+                return "Por favor, indica el plazo en meses como un número entero (ejemplo: 36)."
+
+        if contexto["esperando"] == "empc_tasa_impositiva":
+            try:
+                tasa_impositiva = Decimal(mensaje.replace(",", "").replace("%", ""))
+                if tasa_impositiva < 0 or tasa_impositiva >= 100:
+                    return "Ese porcentaje debe estar entre 0 y menos de 100. Si no aplica, escribe 0."
+                contexto["empc_tasa_impositiva"] = tasa_impositiva
+                contexto["esperando"] = "empc_utilidad_deseada"
+                return (
+                    "8️⃣ ¿Cuánto te gustaría ganar de utilidad (ganancia) en ese periodo, además de cubrir "
+                    "tus costos? (ejemplo: 5000)"
+                )
+            except:
+                return "Por favor, indica el porcentaje como un número (ejemplo: 10, o 0 si no aplica)."
+
+        if contexto["esperando"] == "empc_utilidad_deseada":
+            try:
+                utilidad_deseada = Decimal(mensaje.replace(",", ""))
+                if utilidad_deseada < 0:
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto te gustaría ganar de utilidad en ese periodo?"
+                contexto["empc_utilidad_deseada"] = utilidad_deseada
+                precio_sugerido = calcular_precio_sugerido_emprendedor_completo(
+                    contexto["empc_unidades"],
+                    contexto["empc_costo_unitario"],
+                    contexto["empc_pct_variable"],
+                    contexto["empc_costos_fijos"],
+                    contexto["empc_depreciacion"],
+                    contexto["empc_credito_interes"],
+                    contexto["empc_credito_amortizacion"],
+                    contexto["empc_tasa_impositiva"],
+                    utilidad_deseada,
+                )
+                contexto["empc_precio_sugerido"] = precio_sugerido
+                contexto["esperando"] = "empc_precio_prueba"
+                return (
+                    f"💲 Con esos datos, para ganar ${utilidad_deseada:,.2f} vendiendo "
+                    f"{contexto['empc_unidades']:,.0f} unidades, necesitarías vender cada una en "
+                    f"aproximadamente *${precio_sugerido:,.2f}*.\n\n"
+                    "¿A qué precio tienes pensado vender realmente? Puedes usar este mismo precio sugerido "
+                    f"(escribe {precio_sugerido:,.2f}) o probar otro número, para ver tu punto de equilibrio "
+                    "y la utilidad neta que tendrías."
+                )
+            except:
+                return "Por favor, indica la utilidad deseada como un número (ejemplo: 5000)."
+
+        if contexto["esperando"] == "empc_precio_prueba":
+            try:
+                precio_prueba = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if precio_prueba <= 0:
+                    return "El precio debe ser mayor a cero. ¿A qué precio tienes pensado vender cada unidad?"
+                costo_unitario = contexto["empc_costo_unitario"]
+                pct_variable = contexto["empc_pct_variable"]
+                margen_prueba = precio_prueba * (Decimal("1") - pct_variable / Decimal("100")) - costo_unitario
+                if margen_prueba <= 0:
+                    return (
+                        f"⚠️ A ${precio_prueba:,.2f} por unidad, no alcanzas ni a cubrir tu costo por unidad "
+                        f"más comisiones (${costo_unitario:,.2f} + {pct_variable}% de comisión), así que "
+                        "entre más vendas, más perderías. Prueba con un precio más alto."
+                    )
+                resultado = calcular_resultado_precio_emprendedor_completo(
+                    contexto["empc_unidades"],
+                    costo_unitario,
+                    pct_variable,
+                    contexto["empc_costos_fijos"],
+                    contexto["empc_depreciacion"],
+                    contexto["empc_credito_interes"],
+                    contexto["empc_tasa_impositiva"],
                     precio_prueba,
                 )
                 estado_usuario[numero] = {"esperando": "menu_emprendedor"}
