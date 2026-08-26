@@ -780,6 +780,150 @@ mensaje_emprendedor_tips = (
 )
 
 # =========================================
+# Impuestos y cómo afectan tus finanzas
+# =========================================
+# Tarifa mensual de ISR (Art. 96 LISR) vigente en 2026: (límite inferior, límite
+# superior o None si no tiene, cuota fija, % sobre excedente del límite inferior).
+TABLA_ISR_MENSUAL = [
+    (Decimal("0.01"), Decimal("844.59"), Decimal("0.00"), Decimal("1.92")),
+    (Decimal("844.60"), Decimal("7168.51"), Decimal("16.22"), Decimal("6.40")),
+    (Decimal("7168.52"), Decimal("12598.02"), Decimal("420.95"), Decimal("10.88")),
+    (Decimal("12598.03"), Decimal("14644.64"), Decimal("1011.68"), Decimal("16.00")),
+    (Decimal("14644.65"), Decimal("17533.64"), Decimal("1339.14"), Decimal("17.92")),
+    (Decimal("17533.65"), Decimal("35362.83"), Decimal("1856.84"), Decimal("21.36")),
+    (Decimal("35362.84"), Decimal("55736.68"), Decimal("5665.16"), Decimal("23.52")),
+    (Decimal("55736.69"), Decimal("106410.50"), Decimal("10457.09"), Decimal("30.00")),
+    (Decimal("106410.51"), Decimal("141880.66"), Decimal("25659.23"), Decimal("32.00")),
+    (Decimal("141880.67"), Decimal("425641.99"), Decimal("37009.69"), Decimal("34.00")),
+    (Decimal("425642.00"), None, Decimal("133488.54"), Decimal("35.00")),
+]
+
+def calcular_isr_mensual(ingreso_mensual):
+    """
+    Calcula el ISR mensual sobre un ingreso (sueldo o utilidad de negocio),
+    usando la tarifa progresiva del Art. 96 de la LISR: se paga la cuota fija
+    del rango donde cae el ingreso, más el % de ese rango solo sobre lo que
+    excede el límite inferior (no sobre todo el ingreso). Regresa el ISR y la
+    tasa marginal (el % del rango en el que cayó el ingreso).
+    """
+    ingreso = Decimal(str(ingreso_mensual))
+    if ingreso <= 0:
+        return Decimal("0.00"), Decimal("0")
+    for limite_inferior, limite_superior, cuota_fija, tasa_pct in TABLA_ISR_MENSUAL:
+        if limite_superior is None or ingreso <= limite_superior:
+            excedente = ingreso - limite_inferior
+            isr = cuota_fija + (excedente * tasa_pct / Decimal("100"))
+            return isr.quantize(Decimal("0.01")), tasa_pct
+    ultimo = TABLA_ISR_MENSUAL[-1]
+    excedente = ingreso - ultimo[0]
+    isr = ultimo[2] + (excedente * ultimo[3] / Decimal("100"))
+    return isr.quantize(Decimal("0.01")), ultimo[3]
+
+# Tabla RESICO mensual (Art. 113-E LISR) vigente en 2026: a diferencia del ISR
+# general, aquí la tasa se aplica directo sobre TODO el ingreso, sin cuota fija.
+TABLA_RESICO_MENSUAL = [
+    (Decimal("0.01"), Decimal("25000.00"), Decimal("1.00")),
+    (Decimal("25000.01"), Decimal("50000.00"), Decimal("1.10")),
+    (Decimal("50000.01"), Decimal("83333.33"), Decimal("1.50")),
+    (Decimal("83333.34"), Decimal("208333.33"), Decimal("2.00")),
+    (Decimal("208333.34"), None, Decimal("2.50")),
+]
+
+def calcular_isr_resico_mensual(ingreso_mensual):
+    ingreso = Decimal(str(ingreso_mensual))
+    if ingreso <= 0:
+        return Decimal("0.00"), Decimal("0")
+    for limite_inferior, limite_superior, tasa_pct in TABLA_RESICO_MENSUAL:
+        if limite_superior is None or ingreso <= limite_superior:
+            isr = ingreso * tasa_pct / Decimal("100")
+            return isr.quantize(Decimal("0.01")), tasa_pct
+    ultimo = TABLA_RESICO_MENSUAL[-1]
+    isr = ingreso * ultimo[2] / Decimal("100")
+    return isr.quantize(Decimal("0.01")), ultimo[2]
+
+mensaje_submenu_impuestos = (
+    "🧾 *Impuestos y cómo afectan tus finanzas*\n\n"
+    "Entender tus impuestos te puede ayudar a pagar solo lo justo, y hasta a recuperar dinero. ¿Qué te "
+    "gustaría ver?\n\n"
+    "1️⃣ ¿Por qué me descuentan tanto de mi sueldo? Calcula tu tasa de ISR\n"
+    "2️⃣ ¿Puedo recibir una devolución de impuestos?\n"
+    "3️⃣ Tengo o quiero un negocio: ¿qué es RESICO y por qué puede convenirme?\n\n"
+    "Escribe el número, o *menú* para regresar."
+)
+
+mensaje_impuestos_devolucion = (
+    "💸 *¿Puedo recibir una devolución de impuestos?*\n\n"
+    "Sí. Cada año (normalmente en abril) puedes presentar tu Declaración Anual ante el SAT. Si a lo largo "
+    "del año te retuvieron más ISR del que en realidad debías pagar, o si tienes gastos que puedes deducir, "
+    "el SAT te regresa la diferencia.\n"
+    "________________________________________\n"
+    "🧾 *Gastos que puedes deducir* (deducciones personales), si los pagaste con transferencia, tarjeta o "
+    "cheque (NO en efectivo) y guardaste tu factura (CFDI):\n"
+    "🩺 Honorarios médicos, dentales, de psicología y nutrición\n"
+    "🏥 Gastos hospitalarios y análisis clínicos\n"
+    "👓 Lentes ópticos graduados\n"
+    "🛡️ Primas de seguros de gastos médicos\n"
+    "🎓 Colegiaturas, de preescolar a bachillerato (cada nivel tiene su propio tope)\n"
+    "🚌 Transporte escolar, solo si tu escuela lo hace obligatorio\n"
+    "🏦 Aportaciones voluntarias a tu Afore o plan de retiro\n"
+    "🏠 Intereses reales de tu crédito hipotecario\n"
+    "🕊️ Gastos funerarios de tu cónyuge, padres, hijos o abuelos\n"
+    "🤝 Donativos a instituciones autorizadas por el SAT\n"
+    "________________________________________\n"
+    "⚖️ Todas tus deducciones personales juntas tienen un tope: lo que sea MENOR entre 5 UMAs anuales "
+    "(alrededor de $206,418 en 2026) o el 15% de tus ingresos anuales.\n\n"
+    "🔍 *Nota:* Estos montos y topes los actualiza el SAT cada año; confirma las cifras vigentes en el "
+    "portal del SAT o con un contador antes de declarar."
+)
+
+mensaje_impuestos_resico_intro = (
+    "🚀 Si tienes o estás por abrir un negocio, seguro te preocupa cuánto vas a pagar de impuestos. A "
+    "muchas personas les da miedo darse de alta ante el SAT, pero existe un régimen pensado justo para "
+    "negocios que empiezan: el *RESICO* (Régimen Simplificado de Confianza).\n\n"
+    "🔑 En RESICO pagas una tasa muy baja (de 1% a 2.5%) sobre TODO lo que facturas, sin restar tus "
+    "gastos. En el régimen general pagas una tasa más alta, pero solo sobre tu utilidad (lo que te queda "
+    "después de tus gastos comprobables).\n\n"
+    "Para tributar en RESICO tus ingresos del año no deben superar $3,500,000, y aplica para personas "
+    "físicas con actividad empresarial, honorarios (servicios profesionales) o arrendamiento (hay algunas "
+    "excepciones, como ser socio/a de una empresa; el SAT tiene el detalle completo).\n\n"
+    "Vamos a comparar los dos con tus números.\n\n"
+    "1️⃣ ¿Cuánto facturas o esperas facturar al mes en tu negocio? (ejemplo: 20000)"
+)
+
+def calcular_comparacion_resico(ingreso_mensual, gastos_mensuales):
+    ingreso = Decimal(str(ingreso_mensual))
+    gastos = Decimal(str(gastos_mensuales))
+
+    resico_isr, resico_tasa = calcular_isr_resico_mensual(ingreso)
+    utilidad = max(ingreso - gastos, Decimal("0"))
+    general_isr, general_tasa_marginal = calcular_isr_mensual(utilidad)
+
+    if resico_isr <= general_isr:
+        veredicto = "✅ Con tus números, RESICO te sale más barato."
+    else:
+        veredicto = "✅ Con tus números, el régimen general te sale más barato (por tus gastos comprobables)."
+
+    alerta_limite = ""
+    if ingreso * Decimal("12") > Decimal("3500000"):
+        alerta_limite = (
+            "\n\n⚠️ Con ese ritmo de facturación, tus ingresos del año podrían superar los $3,500,000, que "
+            "es el límite para seguir en RESICO. Lo que importa es tu acumulado anual, así que ve llevando "
+            "la cuenta."
+        )
+
+    return (
+        f"📊 Con ${ingreso:,.2f} facturados al mes:\n\n"
+        f"🟢 En RESICO pagarías: ${resico_isr:,.2f} de ISR (tasa de {resico_tasa}% sobre todo lo que "
+        "facturas)\n"
+        f"🔵 En el régimen general, sobre tu utilidad estimada de ${utilidad:,.2f} (tus ingresos menos los "
+        f"gastos que me diste), pagarías: ${general_isr:,.2f} de ISR\n\n"
+        f"{veredicto}{alerta_limite}\n\n"
+        "🔍 *Nota:* Esta comparación es una referencia simplificada; no incluye otras contribuciones (como "
+        "el IVA) ni el costo de llevar la contabilidad de cada régimen. No sustituye la asesoría de un "
+        "contador."
+    )
+
+# =========================================
 # Menú principal
 # =========================================
 saludo_inicial = (
@@ -794,8 +938,9 @@ saludo_inicial = (
     "5️⃣ Herramientas para el emprendedor\n"
     "6️⃣ Género y finanzas\n"
     "7️⃣ Evalúa tu salud financiera\n"
-    "8️⃣ Glosario de términos financieros\n"
-    "9️⃣ ¿Quiénes hicimos este bot?\n"
+    "8️⃣ Impuestos y cómo afectan tus finanzas\n"
+    "9️⃣ Glosario de términos financieros\n"
+    "🔟 ¿Quiénes hicimos este bot?\n"
     "No te preocupes si no conoces todos estos términos, yo te voy guiando paso a paso 😊\n\n"
     "🔒 Este bot nunca te va a pedir contraseñas, NIP, CVV de tu tarjeta ni códigos de verificación. "
     "Si alguien más te los pide haciéndose pasar por este bot, no se los compartas."
@@ -1322,6 +1467,10 @@ GLOSARIO_TERMINOS = [
      "Certificados de la Tesorería: deuda del gobierno mexicano. Al comprarlos, básicamente le prestas dinero al gobierno a cambio de un interés. Se consideran de bajo riesgo."),
     (["cuota social"], "Cuota social",
      "Una aportación extra que da el gobierno a tu cuenta Afore, además de lo que aportas tú y tu patrón."),
+    (["declaración anual", "declaracion anual"], "Declaración anual",
+     "El trámite que haces ante el SAT (normalmente en abril) para reportar tus ingresos y deducciones del año. Si te retuvieron más impuesto del que debías, aquí es donde puedes recuperar la diferencia."),
+    (["deducción personal", "deduccion personal", "deducciones personales"], "Deducción personal",
+     "Un gasto que la ley te permite restar de tus ingresos antes de calcular tus impuestos (por ejemplo, gastos médicos o colegiaturas), siempre que lo hayas pagado con transferencia, tarjeta o cheque y tengas tu factura."),
     (["deuda revolvente"], "Deuda revolvente",
      "Una deuda sin fecha fija para terminarse, como una tarjeta de crédito: vas pagando lo que usas cada mes, y puedes seguir usando el crédito disponible."),
     (["diversificar", "diversificación"], "Diversificar",
@@ -1330,12 +1479,16 @@ GLOSARIO_TERMINOS = [
      "Lo que realmente recibes de dinero después de impuestos: lo que te depositan o te dan en efectivo."),
     (["interés compuesto"], "Interés compuesto",
      "Cuando el interés que ganas (o debes) también genera más interés con el tiempo, no solo el dinero original. Por eso el dinero puede crecer mucho más mientras más tiempo lo dejes invertido."),
+    (["isr", "impuesto sobre la renta"], "ISR (Impuesto Sobre la Renta)",
+     "El impuesto que pagas sobre el dinero que ganas, ya sea tu sueldo o las ganancias de tu negocio. Entre más ganas, mayor es el porcentaje que te toca pagar."),
     (["ley 73"], "Ley 73",
      "Las reglas para calcular la pensión de quienes se registraron en el IMSS ANTES del 1 de julio de 1997."),
     (["ley 97"], "Ley 97",
      "Las reglas para calcular la pensión de quienes se registraron en el IMSS A PARTIR del 1 de julio de 1997."),
     (["modalidad 40"], "Modalidad 40",
      "Una opción para seguir aportando al IMSS de forma voluntaria cerca de tu retiro (solo aplica si estás en Ley 73), para intentar subir el monto de tu pensión."),
+    (["resico", "régimen simplificado de confianza", "regimen simplificado de confianza"], "RESICO (Régimen Simplificado de Confianza)",
+     "Un régimen fiscal sencillo para personas físicas con ingresos de hasta $3,500,000 al año, donde pagas una tasa baja (de 1% a 2.5%) sobre todo lo que facturas, sin tener que restar tus gastos."),
     (["semanas cotizadas"], "Semanas cotizadas",
      "El número de semanas que has trabajado de forma formal (registrado en el IMSS). Se necesita un mínimo de semanas cotizadas para tener derecho a una pensión."),
     (["tasa de interés", "tasa anual", "tasa periodo", "tasa por periodo"], "Tasa de interés",
@@ -1470,6 +1623,7 @@ def _procesar_mensaje_interno(mensaje, numero):
             "empc_unidades", "empc_costo_unitario", "empc_pct_variable", "empc_costos_fijos",
             "empc_depreciacion", "empc_tiene_credito", "empc_credito_monto", "empc_credito_tasa",
             "empc_credito_plazo", "empc_tasa_impositiva", "empc_utilidad_deseada", "empc_precio_prueba",
+            "menu_impuestos", "impuestos_isr_sueldo", "impuestos_resico_ingreso", "impuestos_resico_gastos",
         ]:
             subflujo_critico = True
 
@@ -1521,11 +1675,17 @@ def _procesar_mensaje_interno(mensaje, numero):
             estado_usuario[numero] = {"esperando": "menu_salud"}
             return mensaje_submenu_salud
 
-        if texto_limpio in ["8", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
+        if texto_limpio in [
+            "8", "impuestos", "impuestos y cómo afectan tus finanzas", "impuestos y como afectan tus finanzas",
+        ]:
+            estado_usuario[numero] = {"esperando": "menu_impuestos"}
+            return mensaje_submenu_impuestos
+
+        if texto_limpio in ["9", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
             estado_usuario[numero] = {}
             return mensaje_glosario
 
-        if texto_limpio in ["9", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
+        if texto_limpio in ["10", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
             estado_usuario[numero] = {}
             return mensaje_creditos
 
@@ -2223,6 +2383,74 @@ def _procesar_mensaje_interno(mensaje, numero):
                 return resultado + "\n\n" + mensaje_submenu_emprendedor
             except:
                 return "Por favor, indica el precio como un número (ejemplo: 60)."
+
+        # --- Submenú: Impuestos y cómo afectan tus finanzas ---
+        if contexto["esperando"] == "menu_impuestos":
+            if texto_limpio in ["menu", "menú"]:
+                estado_usuario[numero] = {}
+                return saludo_inicial
+            if texto_limpio == "1":
+                estado_usuario[numero] = {"esperando": "impuestos_isr_sueldo"}
+                return (
+                    "1️⃣ ¿Cuál es tu sueldo mensual bruto, antes de cualquier descuento? Escribe solo el "
+                    "número. (ejemplo: 15000)"
+                )
+            if texto_limpio == "2":
+                return mensaje_impuestos_devolucion + "\n\n" + mensaje_submenu_impuestos
+            if texto_limpio == "3":
+                estado_usuario[numero] = {"esperando": "impuestos_resico_ingreso"}
+                return mensaje_impuestos_resico_intro
+            return "Por favor, elige una opción válida de esta sección, o escribe *menú* para regresar al inicio."
+
+        if contexto["esperando"] == "impuestos_isr_sueldo":
+            try:
+                sueldo = Decimal(mensaje.replace(",", ""))
+                if sueldo <= 0:
+                    return "El sueldo debe ser mayor a cero. ¿Cuál es tu sueldo mensual bruto? (ejemplo: 15000)"
+                isr, tasa_marginal = calcular_isr_mensual(sueldo)
+                tasa_efectiva = ((isr / sueldo) * Decimal("100")).quantize(Decimal("0.01"))
+                estado_usuario[numero] = {"esperando": "menu_impuestos"}
+                return (
+                    f"📊 Con un sueldo mensual de ${sueldo:,.2f}:\n"
+                    f"🧮 ISR estimado antes de otros descuentos: ${isr:,.2f}\n"
+                    f"📈 Tu tasa marginal (la de tu último rango) es {tasa_marginal}%\n"
+                    f"📉 Tu tasa efectiva real (lo que en verdad pagas sobre TODO tu sueldo) es "
+                    f"{tasa_efectiva}%\n\n"
+                    "💡 México usa un sistema progresivo: no te cobran ese % sobre todo tu sueldo, solo "
+                    "sobre la parte que va cayendo en cada rango. Por eso tu tasa efectiva siempre es "
+                    "menor que tu tasa marginal.\n\n"
+                    "🔍 *Nota:* Esta es una referencia con la tarifa de ISR vigente en 2026. No incluye el "
+                    "\"subsidio para el empleo\" (que puede bajar aún más tu ISR si ganas un sueldo bajo) ni "
+                    "otras retenciones como el IMSS, así que tu recibo de nómina real puede variar un poco. "
+                    "No sustituye la asesoría de tu área de RH o un contador."
+                ) + "\n\n" + mensaje_submenu_impuestos
+            except:
+                return "Por favor, indica tu sueldo mensual como un número (ejemplo: 15000)."
+
+        if contexto["esperando"] == "impuestos_resico_ingreso":
+            try:
+                ingreso = Decimal(mensaje.replace(",", ""))
+                if ingreso <= 0:
+                    return "El monto debe ser mayor a cero. ¿Cuánto facturas o esperas facturar al mes? (ejemplo: 20000)"
+                contexto["impuestos_resico_ingreso"] = ingreso
+                contexto["esperando"] = "impuestos_resico_gastos"
+                return (
+                    "2️⃣ Aproximadamente, ¿cuánto gastas al mes en tu negocio (renta, insumos, sueldos, "
+                    "etc., que puedas comprobar con factura)? Si no tienes gastos o no sabes, escribe 0."
+                )
+            except:
+                return "Por favor, indica el monto como un número (ejemplo: 20000)."
+
+        if contexto["esperando"] == "impuestos_resico_gastos":
+            try:
+                gastos = Decimal(mensaje.replace(",", ""))
+                if gastos < 0:
+                    return "Ese número no puede ser negativo 🙂 Si no tienes gastos que comprobar, escribe 0."
+                resultado = calcular_comparacion_resico(contexto["impuestos_resico_ingreso"], gastos)
+                estado_usuario[numero] = {"esperando": "menu_impuestos"}
+                return resultado + "\n\n" + mensaje_submenu_impuestos
+            except:
+                return "Por favor, indica tus gastos como un número (ejemplo: 5000, o 0 si no tienes)."
 
         # --- Submenú: Crédito ---
         if contexto["esperando"] == "menu_credito":
