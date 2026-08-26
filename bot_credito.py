@@ -755,6 +755,92 @@ def calcular_resultado_precio_emprendedor_completo(
     except Exception as e:
         return f"❌ Error al calcular: {e}"
 
+# --- Calculadora para negocios turísticos ---
+mensaje_turismo_intro = (
+    "🏖️ *Calculadora para negocios turísticos*\n\n"
+    "En turismo (tours, hospedaje, experiencias, renta de equipo, etc.) el costeo funciona un poco "
+    "distinto al de un negocio que vende productos:\n"
+    "📌 Tienes una CAPACIDAD máxima (cupo del tour, cuartos, lugares en la van), y si no la llenas, ese "
+    "espacio se pierde para siempre.\n"
+    "📌 Muchos de tus costos (guía, transporte, permisos, renta del local) se pagan por SALIDA o por "
+    "noche, sin importar cuántas personas vayan.\n"
+    "📌 Si vendes a través de plataformas (Booking, Airbnb, Viator, TripAdvisor, agencias de viajes), "
+    "suelen cobrarte una comisión, comúnmente entre 15% y 25% según la plataforma.\n"
+    "📌 La demanda cambia entre temporada alta y baja, así que conviene calcular pensando en tu ocupación "
+    "PROMEDIO del año, no solo en tus mejores días.\n\n"
+    "Vamos a calcular cuánto te conviene cobrar por persona.\n\n"
+    "1️⃣ ¿Cuál es la capacidad máxima de tu tour, cuarto o servicio? (ejemplo: si tu van o lancha lleva 12 "
+    "personas, escribe 12)"
+)
+
+def calcular_precio_sugerido_turismo(capacidad, ocupacion_pct, costos_fijos, costo_variable, comision_pct, utilidad_deseada):
+    capacidad = Decimal(str(capacidad))
+    ocupacion_frac = Decimal(str(ocupacion_pct)) / Decimal("100")
+    costos_fijos = Decimal(str(costos_fijos))
+    costo_variable = Decimal(str(costo_variable))
+    comision_frac = Decimal(str(comision_pct)) / Decimal("100")
+    utilidad_deseada = Decimal(str(utilidad_deseada))
+
+    personas_esperadas = capacidad * ocupacion_frac
+    precio_base = costo_variable + (costos_fijos + utilidad_deseada) / personas_esperadas
+    precio_sugerido = (precio_base / (Decimal("1") - comision_frac)).quantize(Decimal("0.01"))
+    return precio_sugerido, personas_esperadas
+
+def calcular_resultado_turismo(capacidad, costos_fijos, costo_variable, comision_pct, personas_esperadas, precio_elegido):
+    try:
+        capacidad = Decimal(str(capacidad))
+        costos_fijos = Decimal(str(costos_fijos))
+        costo_variable = Decimal(str(costo_variable))
+        comision_frac = Decimal(str(comision_pct)) / Decimal("100")
+        precio_elegido = Decimal(str(precio_elegido))
+
+        ingreso_neto_persona = precio_elegido * (Decimal("1") - comision_frac)
+        margen_persona = ingreso_neto_persona - costo_variable
+        if margen_persona <= 0:
+            return (
+                f"⚠️ A ${precio_elegido:,.2f} por persona, después de la comisión no alcanzas ni a cubrir tu "
+                f"costo variable por persona (${costo_variable:,.2f}), así que entre más gente lleves, más "
+                "perderías. Prueba con un precio mayor."
+            )
+
+        punto_equilibrio_personas = (costos_fijos / margen_persona).to_integral_value(rounding=ROUND_CEILING)
+        punto_equilibrio_ocupacion_pct = (punto_equilibrio_personas / capacidad * Decimal("100")).quantize(Decimal("0.1"))
+        utilidad_estimada = (margen_persona * personas_esperadas - costos_fijos).quantize(Decimal("0.01"))
+
+        if utilidad_estimada >= 0:
+            linea_utilidad = (
+                f"✅ Con tu ocupación promedio esperada ({personas_esperadas:,.1f} personas por salida), "
+                f"tendrías una utilidad estimada de ${utilidad_estimada:,.2f} por salida."
+            )
+        else:
+            linea_utilidad = (
+                f"⚠️ Con tu ocupación promedio esperada ({personas_esperadas:,.1f} personas por salida), "
+                f"tendrías una pérdida estimada de ${abs(utilidad_estimada):,.2f} por salida."
+            )
+
+        linea_comision = f"🏷️ Comisión de plataforma: {comision_pct}%\n" if comision_frac > 0 else ""
+
+        return (
+            "📌 Resultado con el precio que elegiste:\n"
+            f"💲 Precio por persona: ${precio_elegido:,.2f}\n"
+            f"🧮 Costo variable por persona: ${costo_variable:,.2f}\n"
+            f"📉 Costos fijos por salida: ${costos_fijos:,.2f}\n"
+            f"{linea_comision}\n"
+            f"⚖️ Punto de equilibrio: necesitas {punto_equilibrio_personas:,.0f} personas por salida "
+            f"({punto_equilibrio_ocupacion_pct}% de tu capacidad de {capacidad:,.0f}) solo para no perder "
+            "dinero.\n"
+            f"{linea_utilidad}\n\n"
+            "💡 En temporada baja, en vez de bajar mucho el precio, considera armar paquetes o promociones "
+            "que junten más personas por salida: buena parte de tus costos son fijos por salida, no por "
+            "persona.\n"
+            "💡 Define una política de cancelación clara: en turismo, un lugar cancelado a última hora casi "
+            "siempre se pierde.\n\n"
+            "🔍 *Nota:* Este cálculo es una guía general y simplificada. No sustituye la asesoría de un "
+            "contador."
+        )
+    except Exception as e:
+        return f"❌ Error al calcular: {e}"
+
 mensaje_emprendedor_tips = (
     "💡 *Tips financieros para tu negocio*\n\n"
     "Aquí van algunas ideas que le ayudan a cualquier negocio pequeño a mantenerse más sano financieramente:\n"
@@ -937,8 +1023,8 @@ saludo_inicial = (
     "4️⃣ Jubilación\n"
     "5️⃣ Herramientas para el emprendedor\n"
     "6️⃣ Género y finanzas\n"
-    "7️⃣ Evalúa tu salud financiera\n"
-    "8️⃣ Impuestos y cómo afectan tus finanzas\n"
+    "7️⃣ Impuestos y cómo afectan tus finanzas\n"
+    "8️⃣ Evalúa tu salud financiera\n"
     "9️⃣ Glosario de términos financieros\n"
     "🔟 ¿Quiénes hicimos este bot?\n"
     "No te preocupes si no conoces todos estos términos, yo te voy guiando paso a paso 😊\n\n"
@@ -995,7 +1081,8 @@ mensaje_submenu_emprendedor = (
     "🧰 *Herramientas para el emprendedor*\n\n"
     "1️⃣ ¿A cuánto debo vender? (calculadora rápida)\n"
     "2️⃣ ¿A cuánto debo vender? (calculadora completa, con crédito, depreciación e impuestos)\n"
-    "3️⃣ Tips financieros para tu negocio\n\n"
+    "3️⃣ Calculadora para negocios turísticos (tours, hospedaje, experiencias)\n"
+    "4️⃣ Tips financieros para tu negocio\n\n"
     "Escribe el número, o *menú* para regresar."
 )
 
@@ -1563,8 +1650,45 @@ def normalizar_numero(numero):
         return "52" + numero[3:]
     return numero
 
+# WhatsApp rechaza (error 400) cualquier mensaje de texto de más de 4096
+# caracteres. Como el bot va creciendo (glosario, secciones nuevas, etc.),
+# algún mensaje puede llegar a superar ese límite; en vez de que falle el
+# envío, lo partimos en varios mensajes.
+LIMITE_TEXTO_WHATSAPP = 4096
+
+_SEPARADOR_SECCIONES = "\n________________________________________\n"
+
+def _dividir_mensaje_largo(texto, limite=LIMITE_TEXTO_WHATSAPP):
+    """
+    Si hace falta partir el mensaje, primero intenta cortar justo en uno de
+    los separadores "________" que ya se usan entre secciones/términos, para
+    no partir un título de su explicación a la mitad; si no encuentra uno
+    cerca, corta en el último salto de línea antes del límite.
+    """
+    if len(texto) <= limite:
+        return [texto]
+    partes = []
+    restante = texto
+    while len(restante) > limite:
+        corte = restante.rfind(_SEPARADOR_SECCIONES, 0, limite)
+        if corte > 0:
+            corte += 1  # deja el separador al inicio de la siguiente parte
+        else:
+            corte = restante.rfind("\n", 0, limite)
+        if corte <= 0:
+            corte = limite
+        partes.append(restante[:corte].rstrip())
+        restante = restante[corte:].lstrip("\n")
+    if restante:
+        partes.append(restante)
+    return partes
+
 def enviar_mensaje(numero, texto):
     numero = normalizar_numero(numero)
+    for parte in _dividir_mensaje_largo(texto):
+        _enviar_mensaje_whatsapp(numero, parte)
+
+def _enviar_mensaje_whatsapp(numero, texto):
     print(f"[Enviar a {numero}]: {texto}")
     url = f"https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages"
     headers = {
@@ -1623,6 +1747,8 @@ def _procesar_mensaje_interno(mensaje, numero):
             "empc_unidades", "empc_costo_unitario", "empc_pct_variable", "empc_costos_fijos",
             "empc_depreciacion", "empc_tiene_credito", "empc_credito_monto", "empc_credito_tasa",
             "empc_credito_plazo", "empc_tasa_impositiva", "empc_utilidad_deseada", "empc_precio_prueba",
+            "turismo_capacidad", "turismo_ocupacion", "turismo_costos_fijos", "turismo_costo_variable",
+            "turismo_comision", "turismo_utilidad_deseada", "turismo_precio_prueba",
             "menu_impuestos", "impuestos_isr_sueldo", "impuestos_resico_ingreso", "impuestos_resico_gastos",
         ]:
             subflujo_critico = True
@@ -1669,17 +1795,17 @@ def _procesar_mensaje_interno(mensaje, numero):
             return mensaje_submenu_genero
 
         if texto_limpio in [
-            "7", "evalúa tu salud financiera", "evalua tu salud financiera",
+            "7", "impuestos", "impuestos y cómo afectan tus finanzas", "impuestos y como afectan tus finanzas",
+        ]:
+            estado_usuario[numero] = {"esperando": "menu_impuestos"}
+            return mensaje_submenu_impuestos
+
+        if texto_limpio in [
+            "8", "evalúa tu salud financiera", "evalua tu salud financiera",
             "evaluar mi salud financiera", "salud financiera",
         ]:
             estado_usuario[numero] = {"esperando": "menu_salud"}
             return mensaje_submenu_salud
-
-        if texto_limpio in [
-            "8", "impuestos", "impuestos y cómo afectan tus finanzas", "impuestos y como afectan tus finanzas",
-        ]:
-            estado_usuario[numero] = {"esperando": "menu_impuestos"}
-            return mensaje_submenu_impuestos
 
         if texto_limpio in ["9", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
             estado_usuario[numero] = {}
@@ -2027,7 +2153,13 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "depreciación, un posible crédito del negocio, e impuestos. Son varias preguntas, pero "
                     "el resultado es más preciso.\n\n" + MENSAJE_FRECUENCIA_EMPRENDEDOR
                 )
-            if texto_limpio in ["3", "tips financieros para tu negocio", "tips financieros"]:
+            if texto_limpio in [
+                "3", "calculadora para negocios turísticos", "calculadora para negocios turisticos",
+                "negocios turísticos", "negocios turisticos", "turismo",
+            ]:
+                estado_usuario[numero] = {"esperando": "turismo_capacidad"}
+                return mensaje_turismo_intro
+            if texto_limpio in ["4", "tips financieros para tu negocio", "tips financieros"]:
                 return mensaje_emprendedor_tips + "\n" + mensaje_submenu_emprendedor
             return "Por favor, elige una opción válida de esta sección, o escribe *menú* para regresar al inicio."
 
@@ -2378,6 +2510,124 @@ def _procesar_mensaje_interno(mensaje, numero):
                     contexto["empc_tasa_impositiva"],
                     precio_prueba,
                     contexto.get("empc_frecuencia_frase", "en tu periodo elegido"),
+                )
+                estado_usuario[numero] = {"esperando": "menu_emprendedor"}
+                return resultado + "\n\n" + mensaje_submenu_emprendedor
+            except:
+                return "Por favor, indica el precio como un número (ejemplo: 60)."
+
+        # --- Herramientas para el emprendedor: calculadora para negocios turísticos ---
+        if contexto["esperando"] == "turismo_capacidad":
+            try:
+                capacidad = Decimal(mensaje.replace(",", ""))
+                if capacidad <= 0:
+                    return "La capacidad debe ser mayor a cero. ¿Cuál es la capacidad máxima de tu tour, cuarto o servicio? (ejemplo: 12)"
+                contexto["turismo_capacidad"] = capacidad
+                contexto["esperando"] = "turismo_ocupacion"
+                return (
+                    "2️⃣ ¿Qué porcentaje de esa capacidad esperas ocupar EN PROMEDIO, considerando temporada "
+                    "alta y baja? Si no estás segura/o, un punto de partida común es 50-60%. (ejemplo: 60)"
+                )
+            except:
+                return "Por favor, indica la capacidad como un número (ejemplo: 12)."
+
+        if contexto["esperando"] == "turismo_ocupacion":
+            try:
+                ocupacion = Decimal(mensaje.replace(",", "").replace("%", ""))
+                if ocupacion <= 0 or ocupacion > 100:
+                    return "El porcentaje de ocupación debe estar entre 1 y 100. (ejemplo: 60)"
+                contexto["turismo_ocupacion"] = ocupacion
+                contexto["esperando"] = "turismo_costos_fijos"
+                return (
+                    "3️⃣ ¿Cuánto gastas en costos fijos por cada salida, tour o noche (guía, transporte, "
+                    "permisos, renta), sin importar cuántas personas vayan? (ejemplo: 2000)"
+                )
+            except:
+                return "Por favor, indica el porcentaje como un número (ejemplo: 60)."
+
+        if contexto["esperando"] == "turismo_costos_fijos":
+            try:
+                costos_fijos = Decimal(mensaje.replace(",", ""))
+                if costos_fijos < 0:
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto gastas en costos fijos por salida?"
+                contexto["turismo_costos_fijos"] = costos_fijos
+                contexto["esperando"] = "turismo_costo_variable"
+                return (
+                    "4️⃣ ¿Cuánto gastas por cada persona que participa (comida, entradas, seguro, souvenirs "
+                    "incluidos, etc.)? Si no aplica, escribe 0. (ejemplo: 150)"
+                )
+            except:
+                return "Por favor, indica tus costos fijos como un número (ejemplo: 2000)."
+
+        if contexto["esperando"] == "turismo_costo_variable":
+            try:
+                costo_variable = Decimal(mensaje.replace(",", ""))
+                if costo_variable < 0:
+                    return "Ese número no puede ser negativo 🙂 Si no aplica, escribe 0."
+                contexto["turismo_costo_variable"] = costo_variable
+                contexto["esperando"] = "turismo_comision"
+                return (
+                    "5️⃣ ¿Vendes a través de alguna plataforma o agencia que te cobre comisión (Booking, "
+                    "Airbnb, Viator, TripAdvisor, un agente de viajes, etc.)? Si sí, ¿qué porcentaje te "
+                    "cobra? Si no, escribe 0. (ejemplo: 20)"
+                )
+            except:
+                return "Por favor, indica tu costo variable por persona como un número (ejemplo: 150, o 0 si no aplica)."
+
+        if contexto["esperando"] == "turismo_comision":
+            try:
+                comision = Decimal(mensaje.replace(",", "").replace("%", ""))
+                if comision < 0 or comision >= 100:
+                    return "Ese porcentaje debe estar entre 0 y menos de 100. Si no aplica, escribe 0."
+                contexto["turismo_comision"] = comision
+                contexto["esperando"] = "turismo_utilidad_deseada"
+                return (
+                    "6️⃣ ¿Cuánto te gustaría ganar de utilidad por cada salida, tour o noche, además de "
+                    "cubrir tus costos? (ejemplo: 1000)"
+                )
+            except:
+                return "Por favor, indica el porcentaje como un número (ejemplo: 20, o 0 si no aplica)."
+
+        if contexto["esperando"] == "turismo_utilidad_deseada":
+            try:
+                utilidad_deseada = Decimal(mensaje.replace(",", ""))
+                if utilidad_deseada < 0:
+                    return "Ese número no puede ser negativo 🙂 ¿Cuánto te gustaría ganar de utilidad por salida?"
+                contexto["turismo_utilidad_deseada"] = utilidad_deseada
+                precio_sugerido, personas_esperadas = calcular_precio_sugerido_turismo(
+                    contexto["turismo_capacidad"],
+                    contexto["turismo_ocupacion"],
+                    contexto["turismo_costos_fijos"],
+                    contexto["turismo_costo_variable"],
+                    contexto["turismo_comision"],
+                    utilidad_deseada,
+                )
+                contexto["turismo_personas_esperadas"] = personas_esperadas
+                contexto["esperando"] = "turismo_precio_prueba"
+                return (
+                    f"💲 Con esos datos, para ganar ${utilidad_deseada:,.2f} por salida, considerando que en "
+                    f"promedio van {personas_esperadas:,.1f} personas ({contexto['turismo_ocupacion']}% de "
+                    f"tu capacidad de {contexto['turismo_capacidad']:,.0f}), necesitarías cobrar "
+                    f"aproximadamente *${precio_sugerido:,.2f}* por persona.\n\n"
+                    "¿A qué precio por persona tienes pensado cobrar realmente? Puedes usar este mismo "
+                    f"precio sugerido (escribe {precio_sugerido:,.2f}) o probar otro número, para ver tu "
+                    "punto de equilibrio en ocupación y la utilidad que tendrías."
+                )
+            except:
+                return "Por favor, indica la utilidad deseada como un número (ejemplo: 1000)."
+
+        if contexto["esperando"] == "turismo_precio_prueba":
+            try:
+                precio_prueba = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if precio_prueba <= 0:
+                    return "El precio debe ser mayor a cero. ¿A qué precio por persona tienes pensado cobrar?"
+                resultado = calcular_resultado_turismo(
+                    contexto["turismo_capacidad"],
+                    contexto["turismo_costos_fijos"],
+                    contexto["turismo_costo_variable"],
+                    contexto["turismo_comision"],
+                    contexto["turismo_personas_esperadas"],
+                    precio_prueba,
                 )
                 estado_usuario[numero] = {"esperando": "menu_emprendedor"}
                 return resultado + "\n\n" + mensaje_submenu_emprendedor
