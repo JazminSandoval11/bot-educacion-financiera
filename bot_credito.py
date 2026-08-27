@@ -9,6 +9,9 @@ import json
 import os
 import re
 import unicodedata
+import hashlib
+import threading
+from datetime import datetime, timezone
 from collections import deque
 from decimal import Decimal, getcontext, ROUND_HALF_UP, ROUND_CEILING
 from math import log
@@ -73,6 +76,109 @@ def ya_fue_procesado(message_id):
         id_viejo = _orden_ids_mensajes_procesados.popleft()
         _ids_mensajes_procesados.discard(id_viejo)
     return False
+
+# =========================================
+# Analítica de uso (para investigación sobre el impacto del bot)
+# =========================================
+# Registramos, de forma anónima, por qué pasos del bot va pasando cada
+# persona (nunca el número de teléfono ni el contenido de sus mensajes).
+# Se guarda en una tabla de Supabase (Postgres) si está configurada (ver
+# variables de entorno abajo), usando su API REST directamente con
+# "requests" (ya es una dependencia del bot, no hace falta instalar nada
+# más). Si no está configurada, o si algo falla, simplemente no se registra
+# nada y la conversación sigue normal: esto NUNCA debe romper la
+# experiencia de quien está usando el bot.
+ID_ANONIMO_SALT = os.environ.get('ID_ANONIMO_SALT', '')
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
+SUPABASE_TABLA_EVENTOS = os.environ.get('SUPABASE_TABLA_EVENTOS', 'eventos')
+
+def _id_anonimo(numero):
+    """
+    Convierte un número de teléfono en un identificador anónimo estable (el
+    mismo número siempre produce el mismo id, así se pueden ver los pasos de
+    una misma persona sin saber quién es). Usa una "sal" secreta para que no
+    se pueda recuperar el número original probando todos los números
+    telefónicos posibles.
+    """
+    texto = (ID_ANONIMO_SALT + numero).encode('utf-8')
+    return hashlib.sha256(texto).hexdigest()[:16]
+
+# Una "sesión" agrupa los eventos de una misma visita: si pasan más de 30
+# minutos sin actividad de una persona, el siguiente evento empieza una
+# sesión nueva (es el mismo criterio que usan la mayoría de las
+# herramientas de analítica web). Esto se guarda solo en memoria, así que
+# si el servicio se reinicia (ver mensaje_sesion_reiniciada) una sesión en
+# curso se puede cortar antes de tiempo; es una limitación aceptable.
+_VENTANA_SESION_MINUTOS = 30
+_ultima_actividad_por_numero = {}
+_sesion_actual_por_numero = {}
+
+def _id_sesion_y_duracion(numero):
+    """
+    Devuelve (id_sesion, segundos_desde_paso_anterior) para el evento que se
+    está por registrar. El id de sesión cambia cuando no había actividad
+    previa de esta persona o cuando pasó más de _VENTANA_SESION_MINUTOS
+    desde su último evento. segundos_desde_paso_anterior es None cuando es
+    el primer evento de una sesión (no hay "paso anterior" con el cual
+    comparar dentro de esa misma visita).
+    """
+    ahora = datetime.now(timezone.utc)
+    anterior = _ultima_actividad_por_numero.get(numero)
+    if anterior is not None:
+        segundos = (ahora - anterior).total_seconds()
+    else:
+        segundos = None
+    if anterior is None or segundos > _VENTANA_SESION_MINUTOS * 60:
+        texto = f"{ID_ANONIMO_SALT}{numero}{ahora.isoformat()}".encode('utf-8')
+        _sesion_actual_por_numero[numero] = hashlib.sha256(texto).hexdigest()[:12]
+        segundos = None
+    _ultima_actividad_por_numero[numero] = ahora
+    return _sesion_actual_por_numero[numero], segundos
+
+def _analitica_disponible():
+    return bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+
+def _registrar_evento_uso(numero, estado_antes, estado_despues):
+    """
+    Guarda una fila con el paso anterior y el paso nuevo por el que pasó una
+    persona (identificada solo por su id anónimo), a qué sesión (visita)
+    pertenece, y cuántos segundos pasaron desde su evento anterior dentro de
+    esa misma sesión. Se ejecuta en un hilo aparte para no hacer más lenta
+    la respuesta al usuario, y cualquier error se ignora silenciosamente:
+    esto nunca debe interrumpir la conversación de alguien.
+    """
+    # El id de sesión y la duración se calculan aquí, no dentro del hilo:
+    # así, si llegan dos eventos casi al mismo tiempo para el mismo número,
+    # no hay riesgo de que se les asigne una sesión distinta por una
+    # condición de carrera entre hilos.
+    id_sesion, segundos_desde_anterior = _id_sesion_y_duracion(numero)
+
+    def _tarea():
+        if not _analitica_disponible():
+            return
+        try:
+            fila = {
+                "fecha_hora_utc": datetime.now(timezone.utc).isoformat(),
+                "id_anonimo": _id_anonimo(numero),
+                "id_sesion": id_sesion,
+                "estado_antes": str(estado_antes),
+                "estado_despues": str(estado_despues),
+                "segundos_desde_paso_anterior": segundos_desde_anterior,
+            }
+            url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLA_EVENTOS}"
+            headers = {
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            }
+            respuesta = requests.post(url, headers=headers, json=fila, timeout=10)
+            if respuesta.status_code >= 300:
+                print(f"⚠️ Supabase rechazó el evento de uso ({respuesta.status_code}): {respuesta.text}")
+        except Exception as e:
+            print("⚠️ No se pudo registrar el evento de uso:", e)
+    threading.Thread(target=_tarea, daemon=True).start()
 
 # =========================================
 # Cálculo de pago fijo (tipo Excel)
@@ -1025,12 +1131,39 @@ saludo_inicial = (
     "6️⃣ Género y finanzas\n"
     "7️⃣ Impuestos y cómo afectan tus finanzas\n"
     "8️⃣ Evalúa tu salud financiera\n"
-    "9️⃣ Glosario de términos financieros\n"
-    "🔟 ¿Quiénes hicimos este bot?\n"
+    "9️⃣ Protege tus finanzas: seguros y fraudes\n"
+    "🔟 Glosario de términos financieros\n"
+    "1️⃣1️⃣ ¿Quiénes hicimos este bot?\n"
     "No te preocupes si no conoces todos estos términos, yo te voy guiando paso a paso 😊\n\n"
     "🔒 Este bot nunca te va a pedir contraseñas, NIP, CVV de tu tarjeta ni códigos de verificación. "
-    "Si alguien más te los pide haciéndose pasar por este bot, no se los compartas."
+    "Si alguien más te los pide haciéndose pasar por este bot, no se los compartas.\n\n"
+    "📊 Para poder mejorar este bot, registramos de forma anónima qué opciones se usan (nunca tu número "
+    "ni el contenido de tus mensajes)."
 )
+
+# Si el servicio estuvo dormido por inactividad (plan gratuito de Render) y
+# despierta, se pierde el hilo de cualquier conversación en curso. Si alguien
+# sin conversación activa nos escribe algo que parece la respuesta a una
+# pregunta (por ejemplo, solo un número) en vez de un saludo o un comando,
+# probablemente se quedó a la mitad de algo; en ese caso le explicamos qué
+# pasó en vez de mostrarle la bienvenida como si nada.
+mensaje_sesion_reiniciada = (
+    "🙏 Antes de seguir: parece que pasó un rato desde tu último mensaje y tuve que reiniciar nuestra "
+    "conversación (así funciona el servicio donde vivo: se \"duerme\" tras un rato sin uso). Disculpa las "
+    "molestias, si estabas a la mitad de algo vamos a tener que empezar de nuevo.\n\n"
+) + saludo_inicial
+
+def _parece_respuesta_de_conversacion_perdida(texto_limpio):
+    if not texto_limpio or texto_limpio in [
+        "hola", "menu", "menú", "buenas", "buenos días", "buenos dias",
+        "buenas tardes", "buenas noches", "hi", "hello",
+    ]:
+        return False
+    try:
+        Decimal(texto_limpio.replace(",", "").replace("$", "").replace("%", ""))
+        return True
+    except Exception:
+        return False
 
 mensaje_submenu_ahorro = (
     "💰 *Ahorro*\n\n"
@@ -1541,6 +1674,110 @@ mensaje_credito_derechos_cobranza = (
     "________________________________________\n"
 ) + "\n" + mensaje_submenu_credito
 
+# =========================================
+# Protege tus finanzas: seguros y fraudes
+# =========================================
+mensaje_submenu_proteccion = (
+    "🛡️ *Protege tus finanzas: seguros y fraudes*\n\n"
+    "1️⃣ Seguros: lo básico que debes saber\n"
+    "2️⃣ Fraudes financieros más comunes (y cómo protegerte)\n"
+    "3️⃣ Ya soy víctima de un fraude, ¿qué hago?\n\n"
+    "Escribe el número, o *menú* para regresar."
+)
+
+mensaje_proteccion_seguros = (
+    "🛡️ *Seguros: lo básico que debes saber*\n\n"
+    "Un seguro no es un gasto para cuando te va bien: es una herramienta para que un imprevisto caro "
+    "(un accidente, una enfermedad grave, un choque) no se lleve tus ahorros o te deje endeudado/a.\n"
+    "________________________________________\n"
+    "📖 *Términos que vas a ver siempre*:\n"
+    "📌 *Prima*: lo que pagas (mensual, anual, etc.) por tener el seguro activo.\n"
+    "📌 *Suma asegurada*: el monto máximo que la aseguradora cubre.\n"
+    "📌 *Deducible*: lo que pagas tú primero, antes de que la aseguradora cubra el resto.\n"
+    "📌 *Coaseguro*: un porcentaje del gasto que sigues pagando tú, incluso después del deducible.\n"
+    "📌 *Exclusiones*: lo que el seguro NO cubre. Revísalas siempre antes de firmar.\n"
+    "________________________________________\n"
+    "🧩 *Los básicos*:\n"
+    "🏥 *Gastos médicos mayores*: cubre hospitalización y cirugías costosas. El IMSS/ISSSTE ya te cubre "
+    "esto si eres derechohabiente, pero con tiempos de espera largos; si trabajas por tu cuenta, "
+    "probablemente no tengas ninguna cobertura de este tipo.\n"
+    "❤️ *Seguro de vida*: protege económicamente a quien depende de tu ingreso si tú faltas. Si nadie "
+    "depende de tu ingreso, es menos urgente para ti.\n"
+    "🚗 *Seguro de auto*: cubre daños a otras personas o autos (en varios estados es obligatorio) y, si "
+    "lo agregas, daños a tu propio coche o robo.\n"
+    "🏠 *Seguro de hogar*: cubre daños por incendio y, según la póliza, robo o fenómenos naturales.\n"
+    "________________________________________\n"
+    "❌ *Mitos comunes*:\n"
+    "🚫 \"Estoy sano/a, no lo necesito\": el seguro no es para cuando estás bien, es para el día que no "
+    "lo estés y no puedas pagarlo de tu bolsillo.\n"
+    "🚫 \"Ya tengo IMSS/ISSSTE, no necesito nada más\": te cubre lo básico, pero no siempre con la "
+    "rapidez o el hospital que necesitarías en una emergencia.\n"
+    "________________________________________\n"
+    "🔍 Antes de contratar, no te quedes solo con la prima más barata: compara también el deducible, "
+    "las exclusiones y la red de hospitales o talleres. CONDUSEF tiene simuladores gratuitos (por "
+    "ejemplo, de seguro de auto) en:\n"
+    "🔗 https://www.condusef.gob.mx/?idc=1635&idcat=1&p=contenido\n"
+    "________________________________________\n"
+    "💡 Regla práctica: si perder algo te sacaría de tu presupuesto por meses o años (tu salud, tu "
+    "capacidad de generar ingresos, tu patrimonio), vale la pena asegurarlo. Si solo te incomodaría un "
+    "rato, probablemente no necesitas seguro para eso.\n"
+    "________________________________________\n"
+) + "\n" + mensaje_submenu_proteccion
+
+mensaje_proteccion_fraudes = (
+    "🚨 *Fraudes financieros más comunes (y cómo protegerte)*\n\n"
+    "📊 Las quejas por fraude financiero en México subieron 31.5% en el primer trimestre de 2026 frente "
+    "al mismo periodo de 2025, con más de 1.5 millones de casos y 5,201 millones de pesos reclamados; "
+    "los bancos solo reembolsaron 24.3% de ese monto (Condusef, vía El Universal, julio 2026). México es "
+    "el segundo país más afectado por fraude digital a nivel mundial.\n"
+    "________________________________________\n"
+    "🎭 *Las tácticas más comunes*:\n"
+    "📞 *Vishing (llamada falsa de tu banco)*: te llaman diciendo que hay un cargo sospechoso y te "
+    "piden \"confirmar\" tu tarjeta, tu NIP o un código que te llegó por SMS. Tu banco NUNCA te pide "
+    "esos datos por teléfono.\n"
+    "📱 *Smishing (SMS o WhatsApp con enlaces falsos)*: mensajes como \"tienes una recompensa\" o "
+    "\"tu paquete está retenido\", con un link que roba tus datos al abrirlo.\n"
+    "💸 *Préstamos o créditos falsos*: apps o personas que ofrecen un préstamo \"inmediato, sin "
+    "requisitos\", pero primero te piden un pago \"de garantía\" o \"para activarlo\"; después "
+    "desaparecen o te extorsionan.\n"
+    "💳 *Clonación de tarjeta*: copian los datos de tu tarjeta en un cajero o al pagar. Revisa tus "
+    "movimientos seguido y activa las notificaciones de cada compra.\n"
+    "🤖 *Fraude con inteligencia artificial*: te llaman o mandan un audio con la voz clonada de un "
+    "familiar pidiendo dinero urgente. Cuelga y confírmalo por otro medio antes de transferir nada.\n"
+    "________________________________________\n"
+    "🚩 *Señales de alerta*:\n"
+    "📌 Nadie legítimo (tu banco, el SAT, CONDUSEF) te va a pedir tu NIP, CVV, contraseña o un código "
+    "que te llegó por SMS. Nunca.\n"
+    "📌 Desconfía de la urgencia (\"tu cuenta se bloqueará en 10 minutos\").\n"
+    "📌 No des clic en links de mensajes inesperados; entra directamente escribiendo tú la dirección "
+    "de tu banco.\n"
+    "📌 Si te llaman de \"tu banco\", cuelga y marca tú al número oficial (el de atrás de tu tarjeta).\n"
+    "________________________________________\n"
+    "🆕 En 2026, CONDUSEF lanzó una herramienta para consultar y reportar números telefónicos ya "
+    "identificados en fraudes, antes de compartir cualquier dato. Está disponible en:\n"
+    "🔗 https://www.condusef.gob.mx/\n"
+    "________________________________________\n"
+) + "\n" + mensaje_submenu_proteccion
+
+mensaje_proteccion_que_hacer = (
+    "🆘 *Ya soy víctima de un fraude, ¿qué hago?*\n\n"
+    "1️⃣ Llama de inmediato a tu banco al número oficial (el de atrás de tu tarjeta, no uno que te "
+    "hayan dado por teléfono) para bloquear tu cuenta o tarjeta.\n"
+    "2️⃣ Levanta una aclaración formal por escrito ante tu banco: están obligados a investigarla.\n"
+    "3️⃣ Si tu banco no resuelve o rechaza tu reclamo, acude a CONDUSEF, que puede mediar entre tú y la "
+    "institución:\n"
+    "☎️ 55 5340 0999, o sin costo al 800 999 8080 (lunes a viernes, 8:30 a 16:00 h)\n"
+    "✉️ asesoria@condusef.gob.mx\n"
+    "🔗 https://www.condusef.gob.mx/\n"
+    "4️⃣ Si el fraude fue con una app o negocio falso (no un banco), también puedes denunciar ante la "
+    "Fiscalía o la Guardia Nacional (Policía Cibernética).\n"
+    "5️⃣ Guarda evidencia: capturas de pantalla, números de teléfono y mensajes; te los van a pedir.\n"
+    "________________________________________\n"
+    "💡 Los bancos solo devuelven una fracción de lo reclamado, así que prevenir vale mucho más que "
+    "reclamar después (revisa la opción 2 de esta sección, sobre las tácticas de fraude más comunes).\n"
+    "________________________________________\n"
+) + "\n" + mensaje_submenu_proteccion
+
 GLOSARIO_TERMINOS = [
     (["afore"], "Afore",
      "La institución que administra el dinero que se va acumulando para tu pensión (Administradora de Fondos para el Retiro)."),
@@ -1552,12 +1789,16 @@ GLOSARIO_TERMINOS = [
      "Un número que junta la tasa de interés más las comisiones de un crédito, para que puedas comparar qué tan caro es de verdad. Entre más alto el CAT, más caro te sale el crédito."),
     (["cetes"], "CETES",
      "Certificados de la Tesorería: deuda del gobierno mexicano. Al comprarlos, básicamente le prestas dinero al gobierno a cambio de un interés. Se consideran de bajo riesgo."),
+    (["coaseguro"], "Coaseguro",
+     "En un seguro, el porcentaje del gasto que sigues pagando tú, incluso después de cubrir el deducible."),
     (["cuota social"], "Cuota social",
      "Una aportación extra que da el gobierno a tu cuenta Afore, además de lo que aportas tú y tu patrón."),
     (["declaración anual", "declaracion anual"], "Declaración anual",
      "El trámite que haces ante el SAT (normalmente en abril) para reportar tus ingresos y deducciones del año. Si te retuvieron más impuesto del que debías, aquí es donde puedes recuperar la diferencia."),
     (["deducción personal", "deduccion personal", "deducciones personales"], "Deducción personal",
      "Un gasto que la ley te permite restar de tus ingresos antes de calcular tus impuestos (por ejemplo, gastos médicos o colegiaturas), siempre que lo hayas pagado con transferencia, tarjeta o cheque y tengas tu factura."),
+    (["deducible"], "Deducible (seguro)",
+     "En un seguro, lo que pagas tú primero de tu bolsillo antes de que la aseguradora empiece a cubrir el resto del gasto."),
     (["deuda revolvente"], "Deuda revolvente",
      "Una deuda sin fecha fija para terminarse, como una tarjeta de crédito: vas pagando lo que usas cada mes, y puedes seguir usando el crédito disponible."),
     (["diversificar", "diversificación"], "Diversificar",
@@ -1574,10 +1815,16 @@ GLOSARIO_TERMINOS = [
      "Las reglas para calcular la pensión de quienes se registraron en el IMSS A PARTIR del 1 de julio de 1997."),
     (["modalidad 40"], "Modalidad 40",
      "Una opción para seguir aportando al IMSS de forma voluntaria cerca de tu retiro (solo aplica si estás en Ley 73), para intentar subir el monto de tu pensión."),
+    (["phishing", "vishing", "smishing"], "Phishing",
+     "Un intento de engaño (por llamada, SMS, WhatsApp o correo) donde alguien se hace pasar por tu banco u otra institución para sacarte datos personales o dinero. Ningún banco te pide tu NIP, CVV o contraseña por estos medios."),
+    (["prima"], "Prima (seguro)",
+     "Lo que pagas de forma periódica (mensual, anual, etc.) para mantener un seguro activo."),
     (["resico", "régimen simplificado de confianza", "regimen simplificado de confianza"], "RESICO (Régimen Simplificado de Confianza)",
      "Un régimen fiscal sencillo para personas físicas con ingresos de hasta $3,500,000 al año, donde pagas una tasa baja (de 1% a 2.5%) sobre todo lo que facturas, sin tener que restar tus gastos."),
     (["semanas cotizadas"], "Semanas cotizadas",
      "El número de semanas que has trabajado de forma formal (registrado en el IMSS). Se necesita un mínimo de semanas cotizadas para tener derecho a una pensión."),
+    (["suma asegurada"], "Suma asegurada",
+     "El monto máximo que un seguro cubre en caso de que ocurra lo que estás asegurando."),
     (["tasa de interés", "tasa anual", "tasa periodo", "tasa por periodo"], "Tasa de interés",
      "El porcentaje que te cobran (si pides prestado) o que te pagan (si ahorras/inviertes) sobre el dinero, normalmente expresado por año."),
     (["uma"], "UMA (Unidad de Medida y Actualización)",
@@ -1714,6 +1961,36 @@ def _enviar_mensaje_whatsapp(numero, texto):
     except Exception as e:
         print("❌ Error al enviar mensaje:", e)
 
+# =========================================
+# Retroalimentación (👍/👎) después de una calculadora
+# =========================================
+# Varios resultados de calculadoras ya terminan con esta frase; si la
+# dejáramos, quedaría rara justo antes de la pregunta de retroalimentación.
+_FRASE_MENU_FINAL_RE = re.compile(r'\n*Escribe \*menú\* para volver al inicio\.\s*$')
+
+def _con_feedback(numero, calculadora, texto_resultado, estado_regreso=None, mensaje_regreso=None):
+    """
+    Agrega una pregunta de retroalimentación (👍/👎) al final del resultado de
+    una calculadora, y deja a la persona en un estado especial para leer su
+    respuesta (y registrarla de forma anónima en la analítica de uso, ver
+    _registrar_evento_uso) antes de continuar. estado_regreso/mensaje_regreso
+    son el estado y el submenú que se mostraban normalmente después de este
+    resultado; si son None, después del feedback simplemente se limpia la
+    conversación, igual que antes de agregar esto.
+    """
+    estado_usuario[numero] = {
+        "esperando": "feedback_resultado",
+        "feedback_calculadora": calculadora,
+        "feedback_estado_regreso": estado_regreso,
+        "feedback_mensaje_regreso": mensaje_regreso,
+    }
+    texto_sin_cierre = _FRASE_MENU_FINAL_RE.sub('', texto_resultado).rstrip()
+    return (
+        texto_sin_cierre
+        + "\n\n________________________________________\n"
+        + "🙏 ¿Te resultó útil este resultado? Responde 👍 o 👎 (o escribe *menú* para salir)."
+    )
+
 def _procesar_mensaje_interno(mensaje, numero):
     texto_limpio = _BORDE_PUNTUACION_RE.sub('', mensaje).lower()
 
@@ -1750,6 +2027,7 @@ def _procesar_mensaje_interno(mensaje, numero):
             "turismo_capacidad", "turismo_ocupacion", "turismo_costos_fijos", "turismo_costo_variable",
             "turismo_comision", "turismo_utilidad_deseada", "turismo_precio_prueba",
             "menu_impuestos", "impuestos_isr_sueldo", "impuestos_resico_ingreso", "impuestos_resico_gastos",
+            "menu_proteccion", "feedback_resultado",
         ]:
             subflujo_critico = True
 
@@ -1760,7 +2038,7 @@ def _procesar_mensaje_interno(mensaje, numero):
         return saludo_inicial
 
     # ======================
-    # MENÚ PRINCIPAL 1..8
+    # MENÚ PRINCIPAL 1..11
     # ======================
     if not subflujo_critico:
         if texto_limpio == "hola":
@@ -1807,11 +2085,18 @@ def _procesar_mensaje_interno(mensaje, numero):
             estado_usuario[numero] = {"esperando": "menu_salud"}
             return mensaje_submenu_salud
 
-        if texto_limpio in ["9", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
+        if texto_limpio in [
+            "9", "protege tus finanzas", "protege tus finanzas: seguros y fraudes",
+            "seguros y fraudes", "seguros", "fraudes",
+        ]:
+            estado_usuario[numero] = {"esperando": "menu_proteccion"}
+            return mensaje_submenu_proteccion
+
+        if texto_limpio in ["10", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
             estado_usuario[numero] = {}
             return mensaje_glosario
 
-        if texto_limpio in ["10", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
+        if texto_limpio in ["11", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
             estado_usuario[numero] = {}
             return mensaje_creditos
 
@@ -1948,6 +2233,28 @@ def _procesar_mensaje_interno(mensaje, numero):
     # ===========================
     if numero in estado_usuario and "esperando" in estado_usuario[numero]:
         contexto = estado_usuario[numero]
+
+        # --- Retroalimentación (👍/👎) después del resultado de una calculadora ---
+        if contexto["esperando"] == "feedback_resultado":
+            calculadora = contexto.get("feedback_calculadora", "desconocida")
+            estado_regreso = contexto.get("feedback_estado_regreso")
+            mensaje_regreso = contexto.get("feedback_mensaje_regreso")
+            if texto_limpio in ["menu", "menú"]:
+                estado_usuario[numero] = {}
+                return saludo_inicial
+            if texto_limpio in ["👍", "pulgar arriba", "si", "sí", "1", "util", "útil"]:
+                _registrar_evento_uso(numero, f"feedback_pendiente:{calculadora}", f"feedback_positivo:{calculadora}")
+                estado_usuario[numero] = {"esperando": estado_regreso} if estado_regreso else {}
+                return "¡Qué bueno! Gracias por avisarme 🙌" + (
+                    "\n\n" + mensaje_regreso if mensaje_regreso else "\n\nEscribe *menú* para ver todas las opciones."
+                )
+            if texto_limpio in ["👎", "pulgar abajo", "no", "2", "no util", "no útil"]:
+                _registrar_evento_uso(numero, f"feedback_pendiente:{calculadora}", f"feedback_negativo:{calculadora}")
+                estado_usuario[numero] = {"esperando": estado_regreso} if estado_regreso else {}
+                return "Gracias por decírmelo, nos ayuda a mejorar 🙏" + (
+                    "\n\n" + mensaje_regreso if mensaje_regreso else "\n\nEscribe *menú* para ver todas las opciones."
+                )
+            return "Por favor, responde solo con 👍 o 👎 (o escribe *menú* para salir)."
 
         # --- Submenú: Ahorro ---
         if contexto["esperando"] == "menu_ahorro":
@@ -2092,6 +2399,16 @@ def _procesar_mensaje_interno(mensaje, numero):
 
             valor = int(texto_limpio)
             dim_key = contexto["salud_dimensiones"][contexto["salud_dim_idx"]]
+            pregunta_idx_actual = contexto["salud_preg_idx"]
+            # Registramos cada respuesta de la encuesta como su propio evento
+            # (con la dimensión, el número de pregunta y el valor elegido, sin
+            # texto libre), porque el "esperando" no cambia pregunta a pregunta
+            # y el registro genérico de arriba no alcanzaría a verlas.
+            _registrar_evento_uso(
+                numero,
+                f"salud_pregunta:{dim_key}:{pregunta_idx_actual}",
+                f"salud_respuesta:{dim_key}:{pregunta_idx_actual}:valor={valor}",
+            )
             contexto["salud_puntajes"][dim_key] = contexto["salud_puntajes"].get(dim_key, 0) + valor
             contexto["salud_preg_idx"] += 1
 
@@ -2099,7 +2416,13 @@ def _procesar_mensaje_interno(mensaje, numero):
             dim_actual = DIMENSIONES_SALUD[dim_key]
             if contexto["salud_preg_idx"] >= len(dim_actual["preguntas"]):
                 # Se completó esta dimensión: calculamos y mostramos su resultado.
-                resultado_texto = _resultado_dimension_salud(dim_key, contexto["salud_puntajes"][dim_key]) + "\n\n"
+                puntaje_dim = contexto["salud_puntajes"][dim_key]
+                _registrar_evento_uso(
+                    numero,
+                    f"salud_dimension_completada:{dim_key}",
+                    f"salud_puntaje:{dim_key}:{puntaje_dim}",
+                )
+                resultado_texto = _resultado_dimension_salud(dim_key, puntaje_dim) + "\n\n"
                 contexto["salud_dim_idx"] += 1
                 contexto["salud_preg_idx"] = 0
 
@@ -2248,8 +2571,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     contexto["emprendedor_costos_fijos"],
                     precio_prueba,
                 )
-                estado_usuario[numero] = {"esperando": "menu_emprendedor"}
-                return resultado + "\n\n" + mensaje_submenu_emprendedor
+                return _con_feedback(numero, "emprendedor_simple", resultado, "menu_emprendedor", mensaje_submenu_emprendedor)
             except:
                 return "Por favor, indica el precio como un número (ejemplo: 60)."
 
@@ -2511,8 +2833,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     precio_prueba,
                     contexto.get("empc_frecuencia_frase", "en tu periodo elegido"),
                 )
-                estado_usuario[numero] = {"esperando": "menu_emprendedor"}
-                return resultado + "\n\n" + mensaje_submenu_emprendedor
+                return _con_feedback(numero, "emprendedor_completo", resultado, "menu_emprendedor", mensaje_submenu_emprendedor)
             except:
                 return "Por favor, indica el precio como un número (ejemplo: 60)."
 
@@ -2629,8 +2950,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     contexto["turismo_personas_esperadas"],
                     precio_prueba,
                 )
-                estado_usuario[numero] = {"esperando": "menu_emprendedor"}
-                return resultado + "\n\n" + mensaje_submenu_emprendedor
+                return _con_feedback(numero, "emprendedor_turismo", resultado, "menu_emprendedor", mensaje_submenu_emprendedor)
             except:
                 return "Por favor, indica el precio como un número (ejemplo: 60)."
 
@@ -2659,8 +2979,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     return "El sueldo debe ser mayor a cero. ¿Cuál es tu sueldo mensual bruto? (ejemplo: 15000)"
                 isr, tasa_marginal = calcular_isr_mensual(sueldo)
                 tasa_efectiva = ((isr / sueldo) * Decimal("100")).quantize(Decimal("0.01"))
-                estado_usuario[numero] = {"esperando": "menu_impuestos"}
-                return (
+                resultado = (
                     f"📊 Con un sueldo mensual de ${sueldo:,.2f}:\n"
                     f"🧮 ISR estimado antes de otros descuentos: ${isr:,.2f}\n"
                     f"📈 Tu tasa marginal (la de tu último rango) es {tasa_marginal}%\n"
@@ -2673,7 +2992,8 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "\"subsidio para el empleo\" (que puede bajar aún más tu ISR si ganas un sueldo bajo) ni "
                     "otras retenciones como el IMSS, así que tu recibo de nómina real puede variar un poco. "
                     "No sustituye la asesoría de tu área de RH o un contador."
-                ) + "\n\n" + mensaje_submenu_impuestos
+                )
+                return _con_feedback(numero, "impuestos_isr", resultado, "menu_impuestos", mensaje_submenu_impuestos)
             except:
                 return "Por favor, indica tu sueldo mensual como un número (ejemplo: 15000)."
 
@@ -2697,10 +3017,22 @@ def _procesar_mensaje_interno(mensaje, numero):
                 if gastos < 0:
                     return "Ese número no puede ser negativo 🙂 Si no tienes gastos que comprobar, escribe 0."
                 resultado = calcular_comparacion_resico(contexto["impuestos_resico_ingreso"], gastos)
-                estado_usuario[numero] = {"esperando": "menu_impuestos"}
-                return resultado + "\n\n" + mensaje_submenu_impuestos
+                return _con_feedback(numero, "impuestos_resico", resultado, "menu_impuestos", mensaje_submenu_impuestos)
             except:
                 return "Por favor, indica tus gastos como un número (ejemplo: 5000, o 0 si no tienes)."
+
+        # --- Submenú: Protege tus finanzas (seguros y fraudes) ---
+        if contexto["esperando"] == "menu_proteccion":
+            if texto_limpio in ["menu", "menú"]:
+                estado_usuario[numero] = {}
+                return saludo_inicial
+            if texto_limpio == "1":
+                return mensaje_proteccion_seguros
+            if texto_limpio == "2":
+                return mensaje_proteccion_fraudes
+            if texto_limpio == "3":
+                return mensaje_proteccion_que_hacer
+            return "Por favor, elige una opción válida de esta sección, o escribe *menú* para regresar al inicio."
 
         # --- Submenú: Crédito ---
         if contexto["esperando"] == "menu_credito":
@@ -2888,8 +3220,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     periodos_por_anio,
                     frecuencia_label,
                 )
-                estado_usuario.pop(numero, None)
-                return resultado
+                return _con_feedback(numero, "ahorro_meta", resultado)
             except Exception:
                 return "Hubo un error al calcular. Revisa tus datos e intenta de nuevo."
 
@@ -2905,8 +3236,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     periodos_por_anio,
                     "personalizada",
                 )
-                estado_usuario.pop(numero, None)
-                return resultado
+                return _con_feedback(numero, "ahorro_meta", resultado)
             except Exception:
                 return "Por favor, indica un número de veces al año (ejemplo: 24)."
 
@@ -2997,8 +3327,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     periodos_por_anio,
                     frecuencia_label,
                 )
-                estado_usuario.pop(numero, None)
-                return resultado
+                return _con_feedback(numero, "inversion_crecimiento", resultado)
             except Exception:
                 return "Hubo un error al calcular. Revisa tus datos e intenta de nuevo."
 
@@ -3015,8 +3344,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     periodos_por_anio,
                     "personalizada",
                 )
-                estado_usuario.pop(numero, None)
-                return resultado
+                return _con_feedback(numero, "inversion_crecimiento", resultado)
             except Exception:
                 return "Por favor, indica un número de veces al año (ejemplo: 24)."
 
@@ -3094,8 +3422,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     periodos_por_anio,
                     frecuencia_label,
                 )
-                estado_usuario.pop(numero, None)
-                return resultado
+                return _con_feedback(numero, "jubilacion_meta", resultado)
             except Exception:
                 return "Hubo un error al calcular. Revisa tus datos e intenta de nuevo."
 
@@ -3112,8 +3439,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     periodos_por_anio,
                     "personalizada",
                 )
-                estado_usuario.pop(numero, None)
-                return resultado
+                return _con_feedback(numero, "jubilacion_meta", resultado)
             except Exception:
                 return "Por favor, indica un número de veces al año (ejemplo: 24)."
 
@@ -3180,8 +3506,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     contexto["monto"], contexto["tasa"],
                     contexto["plazo"], contexto["abono"], desde
                 )
-                estado_usuario.pop(numero)
-                return (
+                resultado = (
                     f"💸 Si pagaras este crédito sin hacer abonos extra, terminarías pagando ${float(total_sin):,.2f} en total.\n"
                     f"Pero si decides abonar ${float(contexto['abono']):,.2f} adicionales por periodo desde el periodo {desde}...\n"
                     f"✅ Terminarías de pagar en menos tiempo (¡te ahorras {pagos_menos} pagos!)\n"
@@ -3189,6 +3514,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     f"🧮 Y te ahorrarías ${float(ahorro):,.2f} solo en intereses.\n\n"
                     "Escribe *menú* para volver al inicio."
                 )
+                return _con_feedback(numero, "credito_pagos_extra", resultado)
             except:
                 return "Uy, algo no cuadró con esos datos 🤔 Revisa que hayas escrito solo números y vuelve a intentarlo, o escribe *menú* para empezar de nuevo."
 
@@ -3265,8 +3591,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     contexto["monto"], contexto["tasa"],
                     contexto["plazo"], contexto["abono"], desde
                 )
-                estado_usuario.pop(numero)
-                return (
+                resultado = (
                     f"💸 Si pagaras este crédito sin hacer abonos extra, terminarías pagando ${float(total_sin):,.2f} en total.\n\n"
                     f"Pero si decides abonar ${float(contexto['abono']):,.2f} adicionales por periodo desde el periodo {desde}...\n"
                     f"✅ Terminarías de pagar en menos tiempo (¡te ahorras {pagos_menos} pagos!)\n"
@@ -3274,6 +3599,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     f"🧮 Y te ahorrarías ${float(ahorro):,.2f} solo en intereses.\n\n"
                     "Escribe *menú* para volver al inicio."
                 )
+                return _con_feedback(numero, "credito_pagos_extra", resultado)
             except:
                 return "Uy, algo no cuadró con esos datos 🤔 Revisa que hayas escrito solo números y vuelve a intentarlo, o escribe *menú* para empezar de nuevo."
 
@@ -3327,8 +3653,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     periodos_anuales
                 )
 
-                estado_usuario.pop(numero)
-                return mensaje_resultado
+                return _con_feedback(numero, "credito_costo_meses", mensaje_resultado)
 
             except Exception as e:
                 print(f"Error al calcular tasa anual: {e}")
@@ -3397,8 +3722,7 @@ def _procesar_mensaje_interno(mensaje, numero):
 
             if capacidad_mensual <= 0:
                 faltante = -capacidad_mensual
-                estado_usuario[numero] = {}
-                return (
+                resultado = (
                     f"📊 Con tus datos actuales, tus pagos fijos y el pago mínimo estimado de tus deudas "
                     f"revolventes ya superan por ${faltante:,.2f} al mes lo que se considera manejable de "
                     "tu ingreso. Esto no solo significa que por ahora no te recomendaría tomar un crédito "
@@ -3409,6 +3733,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "te pueden servir.\n\n"
                     "Escribe *menú* para volver al inicio."
                 )
+                return _con_feedback(numero, "credito_cuanto_prestan", resultado)
 
             contexto["capacidad_mensual"] = capacidad_mensual
             contexto["porcentaje_riesgo"] = porcentaje_riesgo
@@ -3517,8 +3842,7 @@ def _procesar_mensaje_interno(mensaje, numero):
             try:
                 frecuencia_label, periodos_por_anio = FRECUENCIAS_PAGO[texto_limpio]
                 resultado = _resolver_frecuencia_deseado(contexto, frecuencia_label, periodos_por_anio)
-                estado_usuario.pop(numero)
-                return resultado
+                return _con_feedback(numero, "credito_cuanto_prestan", resultado)
             except Exception:
                 return "Uy, algo no cuadró con esos datos 🤔 Revisa que hayas escrito solo números y vuelve a intentarlo, o escribe *menú* para empezar de nuevo."
 
@@ -3529,8 +3853,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                 return "Por favor, indica un número de pagos al año (ejemplo: 24)."
             try:
                 resultado = _resolver_frecuencia_deseado(contexto, "personalizada", periodos_por_anio)
-                estado_usuario.pop(numero)
-                return resultado
+                return _con_feedback(numero, "credito_cuanto_prestan", resultado)
             except Exception:
                 return "Uy, algo no cuadró con esos datos 🤔 Revisa que hayas escrito solo números y vuelve a intentarlo, o escribe *menú* para empezar de nuevo."
 
@@ -3567,10 +3890,14 @@ def _procesar_mensaje_interno(mensaje, numero):
                 estado_usuario.pop(numero)
                 return "Entiendo. Escribe *menú*."
 
-    # Sin conversación activa (primera vez, o ya terminó una consulta): damos
-    # la bienvenida sin depender de que adivine la palabra "hola".
+    # Sin conversación activa (primera vez, ya terminó una consulta, o se
+    # perdió por un reinicio del servicio): damos la bienvenida sin depender
+    # de que adivine la palabra "hola", salvo que su mensaje parezca la
+    # respuesta a una pregunta de un flujo que ya no recordamos.
     if numero not in estado_usuario:
         estado_usuario[numero] = {}
+        if _parece_respuesta_de_conversacion_perdida(texto_limpio):
+            return mensaje_sesion_reiniciada
         return saludo_inicial
 
     # Si sí hay una conversación activa pero no reconocimos la respuesta:
@@ -3626,14 +3953,29 @@ def procesar_mensaje(mensaje, numero):
     sin modificar su estado, para no interrumpir un flujo en curso) y, si no
     aplica, delega en la lógica normal de la conversación. Además guarda la
     respuesta del bot como "el último mensaje" para poder simplificarla si
-    la piden después.
+    la piden después, y registra (de forma anónima) el cambio de paso para
+    la analítica de uso.
     """
     texto_limpio = _BORDE_PUNTUACION_RE.sub('', mensaje).lower()
     if es_peticion_explicar_mas_facil(texto_limpio):
+        estado_actual = estado_usuario.get(numero, {}).get("esperando")
+        _registrar_evento_uso(numero, estado_actual, "explicamelo_mas_facil")
         return _explicar_mas_facil(numero)
+
+    # "(primer_contacto)" en vez de None: así el primer mensaje de alguien
+    # nuevo también queda registrado como un cambio de paso real (si no,
+    # pasar de "no existe en estado_usuario" a "esperando: None" se vería
+    # igual que "None a None", o sea que no se registraría nada).
+    es_primer_contacto = numero not in estado_usuario
+    estado_antes = "(primer_contacto)" if es_primer_contacto else estado_usuario.get(numero, {}).get("esperando")
 
     respuesta = _procesar_mensaje_interno(mensaje, numero)
     _ultimo_mensaje_bot[numero] = respuesta
+
+    estado_despues = estado_usuario.get(numero, {}).get("esperando")
+    if es_primer_contacto or estado_antes != estado_despues:
+        _registrar_evento_uso(numero, estado_antes, estado_despues)
+
     return respuesta
 
 @app.route("/webhook", methods=["GET", "POST"])
