@@ -1130,8 +1130,8 @@ saludo_inicial = (
     "5️⃣ Herramientas para el emprendedor\n"
     "6️⃣ Género y finanzas\n"
     "7️⃣ Impuestos y cómo afectan tus finanzas\n"
-    "8️⃣ Evalúa tu salud financiera\n"
-    "9️⃣ Protege tus finanzas: seguros y fraudes\n"
+    "8️⃣ Protege tus finanzas: seguros y fraudes\n"
+    "9️⃣ Evalúa tu salud financiera\n"
     "🔟 Glosario de términos financieros\n"
     "1️⃣1️⃣ ¿Quiénes hicimos este bot?\n"
     "No te preocupes si no conoces todos estos términos, yo te voy guiando paso a paso 😊\n\n"
@@ -2079,18 +2079,18 @@ def _procesar_mensaje_interno(mensaje, numero):
             return mensaje_submenu_impuestos
 
         if texto_limpio in [
-            "8", "evalúa tu salud financiera", "evalua tu salud financiera",
-            "evaluar mi salud financiera", "salud financiera",
-        ]:
-            estado_usuario[numero] = {"esperando": "menu_salud"}
-            return mensaje_submenu_salud
-
-        if texto_limpio in [
-            "9", "protege tus finanzas", "protege tus finanzas: seguros y fraudes",
+            "8", "protege tus finanzas", "protege tus finanzas: seguros y fraudes",
             "seguros y fraudes", "seguros", "fraudes",
         ]:
             estado_usuario[numero] = {"esperando": "menu_proteccion"}
             return mensaje_submenu_proteccion
+
+        if texto_limpio in [
+            "9", "evalúa tu salud financiera", "evalua tu salud financiera",
+            "evaluar mi salud financiera", "salud financiera",
+        ]:
+            estado_usuario[numero] = {"esperando": "menu_salud"}
+            return mensaje_submenu_salud
 
         if texto_limpio in ["10", "glosario", "glosario de términos financieros", "glosario de terminos financieros"]:
             estado_usuario[numero] = {}
