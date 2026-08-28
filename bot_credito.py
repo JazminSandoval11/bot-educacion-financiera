@@ -35,7 +35,7 @@ getcontext().prec = 17  # Precisión tipo Excel
 # NUNCA escribas valores reales aquí directamente.
 TOKEN = os.environ.get('WHATSAPP_TOKEN')
 PHONE_NUMBER_ID = os.environ.get('WHATSAPP_PHONE_NUMBER_ID')
-VERIFY_TOKEN = os.environ.get('WHATSAPP_VERIFY_TOKEN', 'arrocito2024')
+VERIFY_TOKEN = os.environ.get('WHATSAPP_VERIFY_TOKEN')
 
 # Ruta para validar que el sitio está activo (solución para Meta y og:image)
 @app.route('/')
