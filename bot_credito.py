@@ -1138,8 +1138,9 @@ saludo_inicial = (
     "7️⃣ Impuestos y cómo afectan tus finanzas\n"
     "8️⃣ Protege tus finanzas: seguros y fraudes\n"
     "9️⃣ Evalúa tu salud financiera\n"
-    "🔟 Glosario de términos financieros\n"
-    "1️⃣1️⃣ ¿Quiénes hicimos este bot?\n"
+    "🔟 Glosario de términos financieros\n\n"
+    "✨ Y si quieres conocer al equipo detrás de este bot:\n"
+    "1️⃣1️⃣ *¿Quiénes hicimos este bot?* 👩‍🏫\n\n"
     "No te preocupes si no conoces todos estos términos, yo te voy guiando paso a paso 😊\n\n"
     "🔒 Este bot nunca te va a pedir contraseñas, NIP, CVV de tu tarjeta ni códigos de verificación. "
     "Si alguien más te los pide haciéndose pasar por este bot, no se los compartas.\n\n"
@@ -2044,7 +2045,7 @@ def _procesar_mensaje_interno(mensaje, numero):
         return saludo_inicial
 
     # ======================
-    # MENÚ PRINCIPAL 1..11
+    # MENÚ PRINCIPAL 1..10 + "equipo"
     # ======================
     if not subflujo_critico:
         if texto_limpio == "hola":
@@ -2102,7 +2103,9 @@ def _procesar_mensaje_interno(mensaje, numero):
             estado_usuario[numero] = {}
             return mensaje_glosario
 
-        if texto_limpio in ["11", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot"]:
+        if texto_limpio in [
+            "11", "equipo", "quiénes hicimos este bot", "¿quiénes hicimos este bot?", "quienes hicimos este bot",
+        ]:
             estado_usuario[numero] = {}
             return mensaje_creditos
 
