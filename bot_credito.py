@@ -21,6 +21,12 @@ import requests
 # (¡Hola!, Hola., ¿menú? etc. deben reconocerse igual que "hola").
 _BORDE_PUNTUACION_RE = re.compile(r'^[\s¡!¿?.,;:()"\']+|[\s¡!¿?.,;:()"\']+$')
 
+# Varios celulares mandan los emojis con un "selector de variación" (U+FE0F,
+# invisible) o con un modificador de tono de piel (👍🏽, 👍🏿, etc.) pegado al
+# emoji base. Esto no cambia su significado pero sí el texto exacto que llega,
+# así que lo quitamos para que "👍🏽" o "👍️" sigan reconociéndose como "👍".
+_MODIFICADORES_EMOJI_RE = re.compile('[\U0000FE0E\U0000FE0F\U0001F3FB-\U0001F3FF]')
+
 app = Flask(__name__)
 getcontext().prec = 17  # Precisión tipo Excel
 
@@ -1992,7 +1998,7 @@ def _con_feedback(numero, calculadora, texto_resultado, estado_regreso=None, men
     )
 
 def _procesar_mensaje_interno(mensaje, numero):
-    texto_limpio = _BORDE_PUNTUACION_RE.sub('', mensaje).lower()
+    texto_limpio = _MODIFICADORES_EMOJI_RE.sub('', _BORDE_PUNTUACION_RE.sub('', mensaje).lower())
 
     # Estados donde una respuesta numérica (ej. "1", "36") no debe confundirse
     # con los accesos directos del menú principal.
@@ -2254,6 +2260,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                 return "Gracias por decírmelo, nos ayuda a mejorar 🙏" + (
                     "\n\n" + mensaje_regreso if mensaje_regreso else "\n\nEscribe *menú* para ver todas las opciones."
                 )
+            print(f"⚠️ Respuesta de feedback no reconocida. mensaje={mensaje!r} texto_limpio={texto_limpio!r}")
             return "Por favor, responde solo con 👍 o 👎 (o escribe *menú* para salir)."
 
         # --- Submenú: Ahorro ---
@@ -3956,7 +3963,7 @@ def procesar_mensaje(mensaje, numero):
     la piden después, y registra (de forma anónima) el cambio de paso para
     la analítica de uso.
     """
-    texto_limpio = _BORDE_PUNTUACION_RE.sub('', mensaje).lower()
+    texto_limpio = _MODIFICADORES_EMOJI_RE.sub('', _BORDE_PUNTUACION_RE.sub('', mensaje).lower())
     if es_peticion_explicar_mas_facil(texto_limpio):
         estado_actual = estado_usuario.get(numero, {}).get("esperando")
         _registrar_evento_uso(numero, estado_actual, "explicamelo_mas_facil")
