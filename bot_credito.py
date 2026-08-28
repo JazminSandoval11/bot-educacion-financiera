@@ -432,6 +432,58 @@ def calcular_ahorro_por_abonos(monto, tasa, plazo, abono_extra, desde_periodo):
     )
 
 # =========================================
+# Pago mínimo de tarjeta de crédito
+# =========================================
+# Regla vigente de Banco de México (Circular 13/2011, modificada por la
+# 14/2014): el banco debe cobrar el MAYOR entre estos dos pisos, cada uno
+# más los intereses generados en el periodo y el IVA de esos intereses. Los
+# bancos pueden exigir un mínimo más alto, pero nunca uno menor a este piso.
+def _calcular_pago_minimo_tarjeta(saldo, limite, tasa_anual):
+    interes = saldo * tasa_anual / Decimal('12') / Decimal('100')
+    iva = interes * Decimal('0.16')
+    opcion1 = saldo * Decimal('0.015') + interes + iva
+    opcion2 = limite * Decimal('0.0125') + interes + iva
+    if opcion1 >= opcion2:
+        pago_minimo, criterio = opcion1, 1
+    else:
+        pago_minimo, criterio = opcion2, 2
+    tope = saldo + interes + iva
+    if pago_minimo > tope:
+        pago_minimo = tope
+    return pago_minimo, interes, iva, criterio, opcion1, opcion2
+
+def _simular_solo_pago_minimo(saldo, limite, tasa_anual, tope_meses=600):
+    """
+    Simula qué pasaría si una persona SOLO pagara el pago mínimo cada mes,
+    mes tras mes, sin volver a usar la tarjeta. tope_meses es un límite de
+    seguridad para no calcular indefinidamente en un caso extremo.
+    """
+    saldo_restante = saldo
+    meses = 0
+    total_pagado = Decimal('0.00')
+    total_interes_iva = Decimal('0.00')
+    while saldo_restante > Decimal('0.01') and meses < tope_meses:
+        pago_minimo, interes, iva, _, _, _ = _calcular_pago_minimo_tarjeta(saldo_restante, limite, tasa_anual)
+        abono_a_capital = pago_minimo - interes - iva
+        if abono_a_capital <= 0:
+            # No debería ocurrir con la fórmula oficial (siempre incluye un
+            # porcentaje de capital), pero se evita así un ciclo infinito.
+            break
+        if abono_a_capital >= saldo_restante:
+            pago_final = saldo_restante + interes + iva
+            total_pagado += pago_final
+            total_interes_iva += interes + iva
+            saldo_restante = Decimal('0.00')
+            meses += 1
+            break
+        saldo_restante -= abono_a_capital
+        total_pagado += pago_minimo
+        total_interes_iva += interes + iva
+        meses += 1
+    se_alcanzo_el_tope = saldo_restante > Decimal('0.01')
+    return meses, total_pagado.quantize(Decimal('0.01')), total_interes_iva.quantize(Decimal('0.01')), se_alcanzo_el_tope
+
+# =========================================
 # Costo real de compras a pagos fijos
 # =========================================
 from decimal import Decimal, getcontext
@@ -1184,14 +1236,27 @@ mensaje_submenu_credito = (
     "💳 *Crédito*\n\n"
     "1️⃣ Simular un crédito\n"
     "2️⃣ Ahorro con pagos extra a un crédito\n"
-    "3️⃣ Costo real de compras a meses\n"
-    "4️⃣ ¿Cuánto me pueden prestar?\n"
-    "5️⃣ Consejos para pagar sin ahogarte\n"
-    "6️⃣ Identificar un crédito caro\n"
-    "7️⃣ Errores comunes al pedir crédito\n"
-    "8️⃣ Entender el Buró de Crédito\n"
-    "9️⃣ Tus derechos frente al cobro de deudas\n\n"
+    "3️⃣ Costo real de comprar a plazos en tiendas\n"
+    "4️⃣ Pago mínimo de tu tarjeta: cómo se calcula y qué te cuesta\n"
+    "5️⃣ ¿Cuánto me pueden prestar?\n"
+    "6️⃣ Consejos para pagar sin ahogarte\n"
+    "7️⃣ Identificar un crédito caro\n"
+    "8️⃣ Errores comunes al pedir crédito\n"
+    "9️⃣ Entender el Buró de Crédito\n"
+    "🔟 Tus derechos frente al cobro de deudas\n\n"
     "Escribe el número, o *menú* para regresar."
+)
+
+mensaje_intro_pago_minimo = (
+    "💳 *Pago mínimo de tu tarjeta: cómo se calcula*\n\n"
+    "En México, Banxico obliga a los bancos a cobrar como mínimo el MAYOR entre estos dos "
+    "montos (más los intereses del periodo y su IVA):\n"
+    "1️⃣ 1.5% de tu saldo deudor (lo que debes)\n"
+    "2️⃣ 1.25% de tu límite de crédito\n\n"
+    "Los bancos pueden pedirte un mínimo más alto que eso, pero nunca uno menor.\n\n"
+    "Vamos a calcular el tuyo y ver qué pasaría si solo pagaras el mínimo cada mes, sin volver "
+    "a usar la tarjeta. Dime:\n\n"
+    "1️⃣ ¿Cuál es el saldo actual (deuda) de tu tarjeta? (ejemplo: 18000)"
 )
 
 mensaje_submenu_inversion = (
@@ -2035,6 +2100,7 @@ def _procesar_mensaje_interno(mensaje, numero):
             "turismo_comision", "turismo_utilidad_deseada", "turismo_precio_prueba",
             "menu_impuestos", "impuestos_isr_sueldo", "impuestos_resico_ingreso", "impuestos_resico_gastos",
             "menu_proteccion", "feedback_resultado",
+            "pago_minimo_saldo", "pago_minimo_limite", "pago_minimo_tasa",
         ]:
             subflujo_critico = True
 
@@ -2119,13 +2185,23 @@ def _procesar_mensaje_interno(mensaje, numero):
             estado_usuario[numero] = {"esperando": "monto2"}
             return "Para estimar tu ahorro con pagos extra, primero dime el Monto del crédito."
 
-        if texto_limpio in ["costo real de compras a meses", "calcular el costo real de compras a pagos fijos en tiendas departamentales"]:
+        if texto_limpio in [
+            "costo real de compras a meses", "costo real de comprar a plazos en tiendas",
+            "calcular el costo real de compras a pagos fijos en tiendas departamentales",
+        ]:
             estado_usuario[numero] = {"esperando": "precio_contado"}
             return (
                 "Vamos a calcular el costo real de una compra a pagos fijos.\n"
                 "Por favor dime lo siguiente:\n\n"
                 "1️⃣ ¿Cuál es el precio de contado del producto? (ejemplo: 1800)"
             )
+
+        if texto_limpio in [
+            "pago mínimo de tu tarjeta", "pago minimo de tu tarjeta",
+            "cómo se calcula el pago mínimo", "como se calcula el pago minimo",
+        ]:
+            estado_usuario[numero] = {"esperando": "pago_minimo_saldo"}
+            return mensaje_intro_pago_minimo
 
         if texto_limpio in ["cuánto me pueden prestar", "¿cuánto me pueden prestar?"]:
             estado_usuario[numero] = {"esperando": "ingreso"}
@@ -2138,7 +2214,7 @@ def _procesar_mensaje_interno(mensaje, numero):
 
         if texto_limpio in ["consejos para pagar sin ahogarte", "consejos para pagar un crédito sin ahogarte"]:
             return (
-                "🟡 Opción 5: Consejos para pagar un crédito sin ahogarte\n"
+                "🟡 Consejos para pagar un crédito sin ahogarte\n"
                 "Pagar un crédito no tiene que sentirse como una carga eterna. Aquí van algunos consejos sencillos para ayudarte a pagar con más tranquilidad y menos estrés:\n"
                 "________________________________________\n"
                 "✅ 1. Haz pagos anticipados cuando puedas\n"
@@ -3063,6 +3139,9 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "1️⃣ ¿Cuál es el precio de contado del producto? (ejemplo: 1800)"
                 )
             if texto_limpio == "4":
+                estado_usuario[numero] = {"esperando": "pago_minimo_saldo"}
+                return mensaje_intro_pago_minimo
+            if texto_limpio == "5":
                 estado_usuario[numero] = {"esperando": "ingreso"}
                 return (
                     "Vamos a calcular cuánto podrías solicitar como crédito, según tu capacidad de pago.\n\n"
@@ -3070,7 +3149,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "1️⃣ ¿Cuál es tu ingreso mensual neto? Es decir, lo que realmente recibes después de "
                     "impuestos: lo que te depositan o te dan en efectivo. (ejemplo: 15000)"
                 )
-            if texto_limpio == "8":
+            if texto_limpio == "9":
                 contexto["esperando"] = "submenu_buro"
                 return (
                     "El Buró de Crédito no es un enemigo, es solo un registro de cómo has manejado tus créditos. Y sí, puede ayudarte o perjudicarte según tu comportamiento.\n"
@@ -3096,7 +3175,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "¿Te gustaría saber cómo mejorar tu historial crediticio o qué pasos tomar para subir tu puntaje?\n"
                     "Responde *sí* o *no*."
                 )
-            if texto_limpio == "5":
+            if texto_limpio == "6":
                 return (
                     "🟡 Consejos para pagar un crédito sin ahogarte\n"
                     "Pagar un crédito no tiene que sentirse como una carga eterna. Aquí van algunos consejos sencillos para ayudarte a pagar con más tranquilidad y menos estrés:\n"
@@ -3121,7 +3200,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "📌 Si tienes varias, enfócate primero en las que tienen interés más alto, como tarjetas de crédito.\n"
                     "________________________________________\n"
                 ) + "\n" + mensaje_submenu_credito
-            if texto_limpio == "6":
+            if texto_limpio == "7":
                 return (
                     "Muchas veces un crédito parece accesible… hasta que ves lo que terminas pagando. Aquí te doy algunas claves para detectar si un crédito es caro:\n\n"
                     "🔍 1. CAT (Costo Anual Total)\n"
@@ -3138,7 +3217,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "Parece atractivo, pero terminas pagando muchísimo más en intereses.\n\n"
                     "❗ Si el crédito parece demasiado fácil o rápido, pero no entiendes bien cuánto vas a pagar en total... ¡es una señal de alerta!\n\n"
                 ) + "\n" + mensaje_submenu_credito
-            if texto_limpio == "7":
+            if texto_limpio == "8":
                 return (
                     "Solicitar un crédito es una gran responsabilidad. Aquí te comparto algunos errores comunes que muchas personas cometen… ¡y cómo evitarlos!\n"
                     "________________________________________\n"
@@ -3164,9 +3243,93 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "📌 Si no sabes cómo lo vas a pagar, puedes meterte en problemas.\n"
                     "✅ Haz un presupuesto antes de aceptar cualquier crédito.\n\n"
                 ) + "\n" + mensaje_submenu_credito
-            if texto_limpio == "9":
+            if texto_limpio == "10":
                 return mensaje_credito_derechos_cobranza
-            return "Por favor, elige un número del 1 al 9 del menú de Crédito, o escribe *menú* para regresar al inicio."
+            return "Por favor, elige un número del 1 al 10 del menú de Crédito, o escribe *menú* para regresar al inicio."
+
+        # --- Crédito: pago mínimo de tarjeta ---
+        if contexto["esperando"] == "pago_minimo_saldo":
+            try:
+                saldo = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if saldo <= 0:
+                    return "El saldo debe ser mayor a cero. ¿Cuál es el saldo actual (deuda) de tu tarjeta?"
+                contexto["pago_minimo_saldo"] = saldo
+                contexto["esperando"] = "pago_minimo_limite"
+                return (
+                    "2️⃣ ¿Cuál es el límite de crédito de tu tarjeta? Lo encuentras en tu estado de cuenta o "
+                    "en la app de tu banco. (ejemplo: 30000)"
+                )
+            except:
+                return "Por favor, indica el saldo como un número (ejemplo: 18000)."
+
+        if contexto["esperando"] == "pago_minimo_limite":
+            try:
+                limite = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if limite <= 0:
+                    return "El límite debe ser mayor a cero. ¿Cuál es el límite de crédito de tu tarjeta?"
+                contexto["pago_minimo_limite"] = limite
+                contexto["esperando"] = "pago_minimo_tasa"
+                return (
+                    "3️⃣ ¿Cuál es la tasa de interés ANUAL de tu tarjeta? La encuentras en tu estado de cuenta "
+                    "(ejemplo: si dice 45% anual, solo escribe 45).\n\n"
+                    "💡 Si no la conoces: según el dato más reciente de Banxico (junio de 2025), en tarjetas "
+                    "clásicas ronda 41% anual, y en básicas hasta 56% anual, para quienes no pagan de contado."
+                )
+            except:
+                return "Por favor, indica el límite de crédito como un número (ejemplo: 30000)."
+
+        if contexto["esperando"] == "pago_minimo_tasa":
+            try:
+                tasa_anual = Decimal(mensaje.replace(",", "").replace("%", ""))
+                if tasa_anual < 0:
+                    return "La tasa de interés no puede ser negativa. ¿Cuál es la tasa de interés ANUAL de tu tarjeta?"
+                saldo = contexto["pago_minimo_saldo"]
+                limite = contexto["pago_minimo_limite"]
+                pago_minimo, interes, iva, criterio, opcion1, opcion2 = _calcular_pago_minimo_tarjeta(
+                    saldo, limite, tasa_anual
+                )
+                meses, total_pagado, total_interes_iva, se_alcanzo_el_tope = _simular_solo_pago_minimo(
+                    saldo, limite, tasa_anual
+                )
+
+                texto_desglose = (
+                    f"💳 *Tu pago mínimo estimado este mes: ${float(pago_minimo):,.2f}*\n\n"
+                    "Se calcula así (regla de Banxico, se cobra la MAYOR de las dos, más intereses e IVA):\n"
+                    f"1️⃣ 1.5% de tu saldo (${float(saldo):,.2f}) + intereses + IVA = ${float(opcion1):,.2f}\n"
+                    f"2️⃣ 1.25% de tu límite (${float(limite):,.2f}) + intereses + IVA = ${float(opcion2):,.2f}\n"
+                    f"👉 Tu banco cobraría la opción {criterio}, por ser la mayor.\n\n"
+                    "________________________________________\n"
+                )
+
+                if se_alcanzo_el_tope:
+                    texto_simulacion = (
+                        "😬 *Si SOLO pagaras el mínimo cada mes* (sin volver a usar la tarjeta), no alcanzarías "
+                        "a liquidar esta deuda ni en 50 años, porque el pago apenas cubre los intereses y una "
+                        "parte muy pequeña del capital.\n\n"
+                        "💡 Con estos números, pagar solo el mínimo prácticamente no reduce tu deuda. Necesitas "
+                        "abonar más para realmente salir de ella."
+                    )
+                else:
+                    anios = round(meses / 12, 1)
+                    texto_simulacion = (
+                        "😬 *Si SOLO pagaras el mínimo cada mes* (sin volver a usar la tarjeta):\n"
+                        f"📆 Tardarías aproximadamente {meses} meses ({anios} años) en liquidarla.\n"
+                        f"💰 En total pagarías ${float(total_pagado):,.2f}, de los cuales ${float(total_interes_iva):,.2f} "
+                        "son solo intereses e IVA.\n\n"
+                        "💡 Cada peso que abones de más al mínimo reduce ese tiempo y ese costo de forma importante."
+                    )
+
+                resultado = (
+                    texto_desglose
+                    + texto_simulacion
+                    + "\n\nSi quieres ver cuánto te ahorrarías agregando una cantidad fija cada mes, prueba la "
+                    "opción 2️⃣ Ahorro con pagos extra a un crédito del menú de Crédito.\n\n"
+                    "Escribe *menú* para volver al inicio."
+                )
+                return _con_feedback(numero, "pago_minimo_tarjeta", resultado)
+            except Exception as e:
+                print(f"Error al calcular pago mínimo: {e}")
+                return "Uy, algo no cuadró con esos datos 🤔 Revisa que hayas escrito solo números y vuelve a intentarlo, o escribe *menú* para empezar de nuevo."
 
         # --- Ahorro: flujo de meta de ahorro ---
         if contexto["esperando"] == "ahorro_meta":
