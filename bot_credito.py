@@ -1222,69 +1222,96 @@ def calcular_resultado_turismo(capacidad, costos_fijos, costo_variable, comision
         return f"❌ Error al calcular: {e}", False, None
 
 def calcular_punto_equilibrio_mensual_turismo(
-    margen_persona, personas_esperadas, costos_fijos_por_salida, tours_mensuales, costos_fijos_mensuales_negocio
+    margen_persona, personas_esperadas, capacidad, costos_fijos_por_salida, tours_mensuales,
+    costos_fijos_mensuales_negocio,
 ):
     """
-    Extiende el cálculo por salida a una vista mensual: cuántos tours al
-    mes hacen falta para cubrir, además de los costos fijos de cada
-    salida, los costos fijos MENSUALES del negocio (renta de oficina,
-    sueldos fijos, seguros, licencias, etc., que no dependen de cuántos
-    tours se den).
+    Extiende el cálculo por salida a una vista mensual, dando por hecho que
+    vas a dar `tours_mensuales` tours ese mes (ese número ya lo dio la
+    persona, no se recalcula aquí). Con ese número fijo de tours, se
+    reparte el total de personas del mes que hacen falta para cubrir TODOS
+    los costos fijos del mes: los costos fijos por salida (que se pagan una
+    vez por cada tour que realmente se dé, sin importar cuántas personas
+    vayan) multiplicados por esos tours, más los costos fijos generales del
+    negocio.
+
+    OJO: la primera versión de este cálculo sacaba cuántos tours COMPLETOS
+    (a la ocupación esperada) hacían falta para cubrir solo los costos
+    fijos del negocio, y multiplicaba eso por la ocupación esperada. Eso
+    sobreestimaba mucho el punto de equilibrio, porque de por sí un tour
+    completo a la ocupación esperada casi siempre deja bastante más
+    ganancia de la que hace falta para cubrir el resto de los costos fijos
+    del mes: exigía llenar tours enteros en vez de repartir el mínimo de
+    personas necesario entre los tours que de todas formas se van a dar.
     """
     margen_persona = Decimal(str(margen_persona))
     personas_esperadas = Decimal(str(personas_esperadas))
+    capacidad = Decimal(str(capacidad))
     costos_fijos_por_salida = Decimal(str(costos_fijos_por_salida))
     tours_mensuales = Decimal(str(tours_mensuales))
     costos_fijos_mensuales_negocio = Decimal(str(costos_fijos_mensuales_negocio))
 
-    # Ganancia que deja cada salida, ya cubriendo su propio costo fijo por
-    # salida (lo que se calculó arriba), antes de los costos fijos
-    # mensuales del negocio en general.
-    margen_por_tour = margen_persona * personas_esperadas - costos_fijos_por_salida
+    # Ganancia que deja cada salida a tu ocupación esperada, ya cubriendo
+    # su propio costo fijo por salida, antes de los costos fijos
+    # mensuales del negocio en general. Es solo informativo (para que veas
+    # qué tan rentable es tu tour "típico"), el punto de equilibrio de
+    # abajo NO se calcula a partir de este número.
+    margen_por_tour_esperado = margen_persona * personas_esperadas - costos_fijos_por_salida
 
-    if margen_por_tour <= 0:
-        return (
-            "\n\n________________________________________\n"
-            "📆 *Vista mensual de tu negocio*\n"
-            "⚠️ Con esos números, cada salida por separado ya no deja ganancia (ni siquiera cubre su propio "
-            "costo fijo por salida), así que dar más tours al mes solo aumentaría la pérdida. Antes de ver "
-            "el punto de equilibrio mensual, ajusta el precio, la ocupación esperada o tus costos por "
-            "salida."
-        )
-
-    ingresos_mensuales = (margen_por_tour * tours_mensuales).quantize(Decimal("0.01"))
-    utilidad_mensual = (ingresos_mensuales - costos_fijos_mensuales_negocio).quantize(Decimal("0.01"))
+    # Todos los costos fijos del mes: los que se pagan por cada tour que
+    # realmente se dé (independientemente de cuánta gente vaya) más los
+    # costos fijos generales del negocio.
+    costos_fijos_totales_mes = (costos_fijos_por_salida * tours_mensuales) + costos_fijos_mensuales_negocio
+    ingresos_mensuales_esperados = (margen_por_tour_esperado * tours_mensuales).quantize(Decimal("0.01"))
+    utilidad_mensual = (ingresos_mensuales_esperados - costos_fijos_mensuales_negocio).quantize(Decimal("0.01"))
 
     if utilidad_mensual >= 0:
         linea_utilidad_mensual = (
-            f"✅ Con {tours_mensuales:,.0f} tours al mes, tendrías una utilidad estimada de "
-            f"${utilidad_mensual:,.2f} al mes (después de cubrir tus costos fijos mensuales del negocio)."
+            f"✅ Con {tours_mensuales:,.0f} tours al mes a tu ocupación esperada, tendrías una utilidad "
+            f"estimada de ${utilidad_mensual:,.2f} al mes (después de cubrir tus costos fijos mensuales del "
+            "negocio)."
         )
     else:
         linea_utilidad_mensual = (
-            f"⚠️ Con {tours_mensuales:,.0f} tours al mes, tendrías una pérdida estimada de "
-            f"${abs(utilidad_mensual):,.2f} al mes (después de tus costos fijos mensuales del negocio)."
+            f"⚠️ Con {tours_mensuales:,.0f} tours al mes a tu ocupación esperada, tendrías una pérdida "
+            f"estimada de ${abs(utilidad_mensual):,.2f} al mes (después de tus costos fijos mensuales del "
+            "negocio)."
         )
 
-    if costos_fijos_mensuales_negocio > 0:
-        tours_necesarios = (costos_fijos_mensuales_negocio / margen_por_tour).to_integral_value(rounding=ROUND_CEILING)
-        personas_necesarias = (tours_necesarios * personas_esperadas).to_integral_value(rounding=ROUND_CEILING)
+    capacidad_maxima_mes = capacidad * tours_mensuales
+    personas_necesarias_mes = (costos_fijos_totales_mes / margen_persona).to_integral_value(rounding=ROUND_CEILING)
+
+    if personas_necesarias_mes > capacidad_maxima_mes:
         linea_equilibrio_mensual = (
-            f"⚖️ Punto de equilibrio mensual: necesitas dar al menos {tours_necesarios:,.0f} tours al mes "
-            f"(unas {personas_necesarias:,.0f} personas en total) solo para cubrir tus "
-            f"${costos_fijos_mensuales_negocio:,.2f} de costos fijos mensuales del negocio.\n"
+            f"🚨 Ni llenando tus {tours_mensuales:,.0f} tours al 100% de su capacidad "
+            f"({capacidad_maxima_mes:,.0f} personas en el mes) alcanzarías a cubrir tus "
+            f"${costos_fijos_totales_mes:,.2f} de costos fijos totales del mes (costos por salida de tus "
+            f"tours + costos fijos generales del negocio). Con estos números necesitas dar más tours al "
+            "mes, subir el precio, o reducir tus costos fijos.\n"
         )
     else:
+        promedio_necesario_por_tour = (personas_necesarias_mes / tours_mensuales).quantize(Decimal("0.1"))
+        ocupacion_necesaria_pct = (promedio_necesario_por_tour / capacidad * Decimal("100")).quantize(Decimal("0.1"))
         linea_equilibrio_mensual = (
-            "💡 Como no diste costos fijos mensuales adicionales, cada tour que des ya deja ganancia neta "
-            "(aparte de cubrir su propio costo fijo por salida).\n"
+            f"⚖️ Punto de equilibrio mensual: dando tus {tours_mensuales:,.0f} tours al mes, necesitas un "
+            f"total de {personas_necesarias_mes:,.0f} personas en todo el mes (un promedio de "
+            f"{promedio_necesario_por_tour} personas por tour, {ocupacion_necesaria_pct}% de tu capacidad de "
+            f"{capacidad:,.0f}) solo para cubrir tus ${costos_fijos_totales_mes:,.2f} de costos fijos totales "
+            "del mes (costos por salida de tus tours + costos fijos generales del negocio).\n"
         )
+
+    def _fmt_dinero(monto):
+        # Igual que en otras calculadoras: si el monto es negativo, el
+        # signo va antes del $ (-$500.00) en vez de después ($-500.00).
+        return f"-${abs(float(monto)):,.2f}" if monto < 0 else f"${float(monto):,.2f}"
 
     return (
         "\n\n________________________________________\n"
         "📆 *Vista mensual de tu negocio*\n"
-        f"💰 Ganancia por tour (ya cubriendo su costo fijo por salida): ${margen_por_tour:,.2f}\n"
-        f"💵 Ganancia estimada de tus tours antes de costos fijos mensuales del negocio: ${ingresos_mensuales:,.2f}\n"
+        f"💰 Ganancia por tour a tu ocupación esperada (ya cubriendo su costo fijo por salida): "
+        f"{_fmt_dinero(margen_por_tour_esperado)}\n"
+        f"💵 Ganancia estimada de tus tours antes de costos fijos mensuales del negocio: "
+        f"{_fmt_dinero(ingresos_mensuales_esperados)}\n"
         f"{linea_equilibrio_mensual}"
         f"{linea_utilidad_mensual}\n\n"
         "🔍 *Nota:* Este cálculo asume que el número de tours y la ocupación promedio se mantienen estables "
@@ -3423,6 +3450,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                 texto_mensual = calcular_punto_equilibrio_mensual_turismo(
                     contexto["turismo_margen_persona"],
                     contexto["turismo_personas_esperadas"],
+                    contexto["turismo_capacidad"],
                     contexto["turismo_costos_fijos"],
                     contexto["turismo_tours_mensuales"],
                     costos_fijos_mensuales,
