@@ -13,7 +13,7 @@ import hashlib
 import threading
 from datetime import datetime, timezone
 from collections import deque
-from decimal import Decimal, getcontext, ROUND_HALF_UP, ROUND_CEILING
+from decimal import Decimal, getcontext, localcontext, ROUND_HALF_UP, ROUND_CEILING
 from math import log
 import requests
 
@@ -98,6 +98,7 @@ ID_ANONIMO_SALT = os.environ.get('ID_ANONIMO_SALT', '')
 SUPABASE_URL = os.environ.get('SUPABASE_URL')
 SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
 SUPABASE_TABLA_EVENTOS = os.environ.get('SUPABASE_TABLA_EVENTOS', 'eventos')
+SUPABASE_TABLA_SESIONES = os.environ.get('SUPABASE_TABLA_SESIONES', 'sesiones_activas')
 
 def _id_anonimo(numero):
     """
@@ -185,6 +186,102 @@ def _registrar_evento_uso(numero, estado_antes, estado_despues):
         except Exception as e:
             print("⚠️ No se pudo registrar el evento de uso:", e)
     threading.Thread(target=_tarea, daemon=True).start()
+
+# =========================================
+# Persistencia de la conversación en curso
+# =========================================
+# estado_usuario vive en memoria, así que se perdía por completo cada vez
+# que Render reiniciaba el servicio (por ejemplo, tras dormirse por
+# inactividad en el plan gratuito): quien estuviera a la mitad de algo caía
+# en mensaje_sesion_reiniciada y tenía que empezar de nuevo. Para evitarlo,
+# cada vez que el estado de una persona cambia se guarda también en
+# Supabase (misma tabla de credenciales que la analítica de uso, usando el
+# mismo id anónimo como llave, nunca el número real), y si el bot arranca
+# de cero y alguien escribe, primero se intenta recuperar su estado antes
+# de asumir que es una conversación nueva. Igual que la analítica, esto es
+# opcional (si Supabase no está configurado, o algo falla, simplemente no
+# hay persistencia y el bot sigue funcionando como antes) y nunca debe
+# interrumpir la conversación de alguien.
+_SESION_EXPIRA_HORAS = 6
+
+def _json_default(obj):
+    if isinstance(obj, Decimal):
+        return {"__decimal__": str(obj)}
+    raise TypeError(f"Objeto no serializable en el estado de la conversación: {type(obj)}")
+
+def _json_object_hook(d):
+    if len(d) == 1 and "__decimal__" in d:
+        return Decimal(d["__decimal__"])
+    return d
+
+def _guardar_estado_sesion(numero):
+    """
+    Guarda (en un hilo aparte, sin bloquear la respuesta) el estado actual
+    de la conversación de esta persona, para poder recuperarlo si el
+    servicio se reinicia antes de que termine su flujo.
+    """
+    estado_actual = estado_usuario.get(numero, {})
+
+    def _tarea():
+        if not _analitica_disponible():
+            return
+        try:
+            fila = {
+                "id_anonimo": _id_anonimo(numero),
+                "estado": json.dumps(estado_actual, default=_json_default),
+                "actualizado_en": datetime.now(timezone.utc).isoformat(),
+            }
+            url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLA_SESIONES}?on_conflict=id_anonimo"
+            headers = {
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates,return=minimal",
+            }
+            respuesta = requests.post(url, headers=headers, json=fila, timeout=10)
+            if respuesta.status_code >= 300:
+                print(f"⚠️ Supabase rechazó guardar la sesión ({respuesta.status_code}): {respuesta.text}")
+        except Exception as e:
+            print("⚠️ No se pudo guardar la sesión:", e)
+    threading.Thread(target=_tarea, daemon=True).start()
+
+def _cargar_estado_sesion(numero):
+    """
+    Intenta recuperar de Supabase el estado guardado de esta persona. Es la
+    única parte de la persistencia que es síncrona (bloquea la respuesta),
+    porque hace falta el resultado antes de seguir procesando el mensaje;
+    por eso usa un timeout corto y solo se llama cuando numero no está ya
+    en memoria (o sea, como mucho una vez por persona por cada reinicio del
+    servicio, no en cada mensaje). Si algo falla, o la sesión guardada ya es
+    muy vieja, devuelve None y el bot sigue como si no hubiera nada guardado.
+    """
+    if not _analitica_disponible():
+        return None
+    try:
+        url = (
+            f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLA_SESIONES}"
+            f"?id_anonimo=eq.{_id_anonimo(numero)}&select=estado,actualizado_en"
+        )
+        headers = {
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        }
+        respuesta = requests.get(url, headers=headers, timeout=4)
+        if respuesta.status_code >= 300:
+            print(f"⚠️ Supabase rechazó leer la sesión ({respuesta.status_code}): {respuesta.text}")
+            return None
+        filas = respuesta.json()
+        if not filas:
+            return None
+        fila = filas[0]
+        actualizado_en = datetime.fromisoformat(fila["actualizado_en"].replace("Z", "+00:00"))
+        antiguedad_horas = (datetime.now(timezone.utc) - actualizado_en).total_seconds() / 3600
+        if antiguedad_horas > _SESION_EXPIRA_HORAS:
+            return None
+        return json.loads(fila["estado"], object_hook=_json_object_hook)
+    except Exception as e:
+        print("⚠️ No se pudo recuperar la sesión guardada:", e)
+        return None
 
 # =========================================
 # Cálculo de pago fijo (tipo Excel)
@@ -482,6 +579,108 @@ def _simular_solo_pago_minimo(saldo, limite, tasa_anual, tope_meses=600):
         meses += 1
     se_alcanzo_el_tope = saldo_restante > Decimal('0.01')
     return meses, total_pagado.quantize(Decimal('0.01')), total_interes_iva.quantize(Decimal('0.01')), se_alcanzo_el_tope
+
+# =========================================
+# Plan para pagar varias deudas (bola de nieve / avalancha)
+# =========================================
+def _simular_estrategia_deudas(deudas, extra_mensual, orden_indices, tope_meses=600):
+    """
+    Simula, mes a mes, pagar varias deudas a la vez: cada mes se cobra
+    interés sobre el saldo restante de cada una, se paga el mínimo de todas
+    las que sigan activas, y el dinero extra disponible (el abono extra que
+    la persona puede dar, más los mínimos ya liberados de las deudas que se
+    van terminando) se concentra en la deuda que esté primero en
+    orden_indices. Así se refleja el efecto "bola de nieve": el abono
+    disponible va creciendo conforme se liquida cada deuda.
+
+    deudas: lista de dicts con 'saldo', 'tasa_anual' (%) y 'pago_minimo'.
+    orden_indices: lista de índices de `deudas`, en el orden de prioridad
+    en que se les debe dar el dinero extra.
+
+    Devuelve: (meses_totales, total_pagado, total_intereses,
+    meses_liquidacion_por_indice, se_alcanzo_el_tope)
+    """
+    # Se usa un contexto de Decimal aparte, con mucha más precisión que la
+    # global (que en este archivo se deja en 17 dígitos para el cálculo de
+    # "costo real de compras a plazos"). Cuando una deuda es impagable con
+    # los datos dados, el saldo simulado crece exponencialmente durante
+    # varios cientos de meses hasta el tope de seguridad, y puede rebasar
+    # 17 dígitos mucho antes de llegar ahí; con más precisión evitamos que
+    # eso truene el cálculo en vez de simplemente reportar "no se puede
+    # pagar" con tope_meses alcanzado.
+    with localcontext() as ctx:
+        ctx.prec = 200
+
+        n = len(deudas)
+        saldos = [d["saldo"] for d in deudas]
+        minimos = [d["pago_minimo"] for d in deudas]
+        tasas = [d["tasa_anual"] for d in deudas]
+        meses_liquidacion = [None] * n
+        total_pagado = Decimal('0.00')
+        total_interes = Decimal('0.00')
+        meses = 0
+
+        while any(s > Decimal('0.01') for s in saldos) and meses < tope_meses:
+            meses += 1
+            # 1) Se aplica el interés del mes a cada deuda todavía activa.
+            for i in range(n):
+                if saldos[i] > Decimal('0.01'):
+                    interes_i = saldos[i] * tasas[i] / Decimal('12') / Decimal('100')
+                    saldos[i] += interes_i
+                    total_interes += interes_i
+
+            # 2) El dinero disponible este mes es el abono extra fijo, más el
+            # pago mínimo de cada deuda que ya esté en cero (ese dinero ya no
+            # tiene a dónde ir, así que se suma al abono extra).
+            dinero_disponible = extra_mensual
+            for i in range(n):
+                if saldos[i] > Decimal('0.01'):
+                    pago = minimos[i] if minimos[i] < saldos[i] else saldos[i]
+                    saldos[i] -= pago
+                    total_pagado += pago
+                else:
+                    dinero_disponible += minimos[i]
+
+            # 3) Todo el dinero disponible se concentra en la deuda de mayor
+            # prioridad que siga activa; si sobra, pasa a la siguiente.
+            for idx in orden_indices:
+                if dinero_disponible <= 0:
+                    break
+                if saldos[idx] > Decimal('0.01'):
+                    abono = dinero_disponible if dinero_disponible < saldos[idx] else saldos[idx]
+                    saldos[idx] -= abono
+                    dinero_disponible -= abono
+                    total_pagado += abono
+
+            for i in range(n):
+                if meses_liquidacion[i] is None and saldos[i] <= Decimal('0.01'):
+                    meses_liquidacion[i] = meses
+
+        se_alcanzo_el_tope = any(s > Decimal('0.01') for s in saldos)
+        # El redondeo final también se hace dentro del contexto ampliado
+        # (necesita suficiente precisión disponible si el monto quedó
+        # enorme, caso de una deuda impagable). Como red de seguridad
+        # adicional, si aun así no se pudiera redondear (una tasa
+        # descomunal metida por error, por ejemplo), se usa un redondeo
+        # aproximado en vez de dejar que truene: en ese caso siempre se
+        # alcanzó el tope de todos modos, así que el número exacto ya no
+        # importa para el mensaje que se muestra.
+        try:
+            total_pagado = total_pagado.quantize(Decimal('0.01'))
+        except Exception:
+            total_pagado = Decimal(str(round(float(total_pagado), 2)))
+        try:
+            total_interes = total_interes.quantize(Decimal('0.01'))
+        except Exception:
+            total_interes = Decimal(str(round(float(total_interes), 2)))
+
+    return (
+        meses,
+        total_pagado,
+        total_interes,
+        meses_liquidacion,
+        se_alcanzo_el_tope,
+    )
 
 # =========================================
 # Costo real de compras a pagos fijos
@@ -945,12 +1144,23 @@ def calcular_precio_sugerido_turismo(capacidad, ocupacion_pct, costos_fijos, cos
     comision_frac = Decimal(str(comision_pct)) / Decimal("100")
     utilidad_deseada = Decimal(str(utilidad_deseada))
 
-    personas_esperadas = capacidad * ocupacion_frac
+    # Se redondea a personas enteras (no se puede llevar, por ejemplo, 0.2
+    # personas en la práctica), con un mínimo de 1 para no dividir entre
+    # cero si la capacidad u ocupación son muy bajas.
+    personas_esperadas = (capacidad * ocupacion_frac).to_integral_value(rounding=ROUND_HALF_UP)
+    if personas_esperadas < 1:
+        personas_esperadas = Decimal("1")
     precio_base = costo_variable + (costos_fijos + utilidad_deseada) / personas_esperadas
     precio_sugerido = (precio_base / (Decimal("1") - comision_frac)).quantize(Decimal("0.01"))
     return precio_sugerido, personas_esperadas
 
 def calcular_resultado_turismo(capacidad, costos_fijos, costo_variable, comision_pct, personas_esperadas, precio_elegido):
+    """
+    Devuelve (texto_resultado, es_viable, margen_persona). es_viable indica
+    si a ese precio se puede seguir con el punto de equilibrio MENSUAL
+    (opción aparte): si el margen por persona ya es negativo o cero, no
+    tiene caso preguntar por costos mensuales del negocio.
+    """
     try:
         capacidad = Decimal(str(capacidad))
         costos_fijos = Decimal(str(costos_fijos))
@@ -964,7 +1174,9 @@ def calcular_resultado_turismo(capacidad, costos_fijos, costo_variable, comision
             return (
                 f"⚠️ A ${precio_elegido:,.2f} por persona, después de la comisión no alcanzas ni a cubrir tu "
                 f"costo variable por persona (${costo_variable:,.2f}), así que entre más gente lleves, más "
-                "perderías. Prueba con un precio mayor."
+                "perderías. Prueba con un precio mayor.",
+                False,
+                margen_persona,
             )
 
         punto_equilibrio_personas = (costos_fijos / margen_persona).to_integral_value(rounding=ROUND_CEILING)
@@ -973,37 +1185,111 @@ def calcular_resultado_turismo(capacidad, costos_fijos, costo_variable, comision
 
         if utilidad_estimada >= 0:
             linea_utilidad = (
-                f"✅ Con tu ocupación promedio esperada ({personas_esperadas:,.1f} personas por salida), "
+                f"✅ Con tu ocupación promedio esperada ({personas_esperadas:,.0f} personas por salida), "
                 f"tendrías una utilidad estimada de ${utilidad_estimada:,.2f} por salida."
             )
         else:
             linea_utilidad = (
-                f"⚠️ Con tu ocupación promedio esperada ({personas_esperadas:,.1f} personas por salida), "
+                f"⚠️ Con tu ocupación promedio esperada ({personas_esperadas:,.0f} personas por salida), "
                 f"tendrías una pérdida estimada de ${abs(utilidad_estimada):,.2f} por salida."
             )
 
         linea_comision = f"🏷️ Comisión de plataforma: {comision_pct}%\n" if comision_frac > 0 else ""
 
         return (
-            "📌 Resultado con el precio que elegiste:\n"
-            f"💲 Precio por persona: ${precio_elegido:,.2f}\n"
-            f"🧮 Costo variable por persona: ${costo_variable:,.2f}\n"
-            f"📉 Costos fijos por salida: ${costos_fijos:,.2f}\n"
-            f"{linea_comision}\n"
-            f"⚖️ Punto de equilibrio: necesitas {punto_equilibrio_personas:,.0f} personas por salida "
-            f"({punto_equilibrio_ocupacion_pct}% de tu capacidad de {capacidad:,.0f}) solo para no perder "
-            "dinero.\n"
-            f"{linea_utilidad}\n\n"
-            "💡 En temporada baja, en vez de bajar mucho el precio, considera armar paquetes o promociones "
-            "que junten más personas por salida: buena parte de tus costos son fijos por salida, no por "
-            "persona.\n"
-            "💡 Define una política de cancelación clara: en turismo, un lugar cancelado a última hora casi "
-            "siempre se pierde.\n\n"
-            "🔍 *Nota:* Este cálculo es una guía general y simplificada. No sustituye la asesoría de un "
-            "contador."
+            (
+                "📌 Resultado con el precio que elegiste:\n"
+                f"💲 Precio por persona: ${precio_elegido:,.2f}\n"
+                f"🧮 Costo variable por persona: ${costo_variable:,.2f}\n"
+                f"📉 Costos fijos por salida: ${costos_fijos:,.2f}\n"
+                f"{linea_comision}\n"
+                f"⚖️ Punto de equilibrio: necesitas {punto_equilibrio_personas:,.0f} personas por salida "
+                f"({punto_equilibrio_ocupacion_pct}% de tu capacidad de {capacidad:,.0f}) solo para no perder "
+                "dinero.\n"
+                f"{linea_utilidad}\n\n"
+                "💡 En temporada baja, en vez de bajar mucho el precio, considera armar paquetes o promociones "
+                "que junten más personas por salida: buena parte de tus costos son fijos por salida, no por "
+                "persona.\n"
+                "💡 Define una política de cancelación clara: en turismo, un lugar cancelado a última hora casi "
+                "siempre se pierde.\n\n"
+                "🔍 *Nota:* Este cálculo es una guía general y simplificada. No sustituye la asesoría de un "
+                "contador."
+            ),
+            True,
+            margen_persona,
         )
     except Exception as e:
-        return f"❌ Error al calcular: {e}"
+        return f"❌ Error al calcular: {e}", False, None
+
+def calcular_punto_equilibrio_mensual_turismo(
+    margen_persona, personas_esperadas, costos_fijos_por_salida, tours_mensuales, costos_fijos_mensuales_negocio
+):
+    """
+    Extiende el cálculo por salida a una vista mensual: cuántos tours al
+    mes hacen falta para cubrir, además de los costos fijos de cada
+    salida, los costos fijos MENSUALES del negocio (renta de oficina,
+    sueldos fijos, seguros, licencias, etc., que no dependen de cuántos
+    tours se den).
+    """
+    margen_persona = Decimal(str(margen_persona))
+    personas_esperadas = Decimal(str(personas_esperadas))
+    costos_fijos_por_salida = Decimal(str(costos_fijos_por_salida))
+    tours_mensuales = Decimal(str(tours_mensuales))
+    costos_fijos_mensuales_negocio = Decimal(str(costos_fijos_mensuales_negocio))
+
+    # Ganancia que deja cada salida, ya cubriendo su propio costo fijo por
+    # salida (lo que se calculó arriba), antes de los costos fijos
+    # mensuales del negocio en general.
+    margen_por_tour = margen_persona * personas_esperadas - costos_fijos_por_salida
+
+    if margen_por_tour <= 0:
+        return (
+            "\n\n________________________________________\n"
+            "📆 *Vista mensual de tu negocio*\n"
+            "⚠️ Con esos números, cada salida por separado ya no deja ganancia (ni siquiera cubre su propio "
+            "costo fijo por salida), así que dar más tours al mes solo aumentaría la pérdida. Antes de ver "
+            "el punto de equilibrio mensual, ajusta el precio, la ocupación esperada o tus costos por "
+            "salida."
+        )
+
+    ingresos_mensuales = (margen_por_tour * tours_mensuales).quantize(Decimal("0.01"))
+    utilidad_mensual = (ingresos_mensuales - costos_fijos_mensuales_negocio).quantize(Decimal("0.01"))
+
+    if utilidad_mensual >= 0:
+        linea_utilidad_mensual = (
+            f"✅ Con {tours_mensuales:,.0f} tours al mes, tendrías una utilidad estimada de "
+            f"${utilidad_mensual:,.2f} al mes (después de cubrir tus costos fijos mensuales del negocio)."
+        )
+    else:
+        linea_utilidad_mensual = (
+            f"⚠️ Con {tours_mensuales:,.0f} tours al mes, tendrías una pérdida estimada de "
+            f"${abs(utilidad_mensual):,.2f} al mes (después de tus costos fijos mensuales del negocio)."
+        )
+
+    if costos_fijos_mensuales_negocio > 0:
+        tours_necesarios = (costos_fijos_mensuales_negocio / margen_por_tour).to_integral_value(rounding=ROUND_CEILING)
+        personas_necesarias = (tours_necesarios * personas_esperadas).to_integral_value(rounding=ROUND_CEILING)
+        linea_equilibrio_mensual = (
+            f"⚖️ Punto de equilibrio mensual: necesitas dar al menos {tours_necesarios:,.0f} tours al mes "
+            f"(unas {personas_necesarias:,.0f} personas en total) solo para cubrir tus "
+            f"${costos_fijos_mensuales_negocio:,.2f} de costos fijos mensuales del negocio.\n"
+        )
+    else:
+        linea_equilibrio_mensual = (
+            "💡 Como no diste costos fijos mensuales adicionales, cada tour que des ya deja ganancia neta "
+            "(aparte de cubrir su propio costo fijo por salida).\n"
+        )
+
+    return (
+        "\n\n________________________________________\n"
+        "📆 *Vista mensual de tu negocio*\n"
+        f"💰 Ganancia por tour (ya cubriendo su costo fijo por salida): ${margen_por_tour:,.2f}\n"
+        f"💵 Ganancia estimada de tus tours antes de costos fijos mensuales del negocio: ${ingresos_mensuales:,.2f}\n"
+        f"{linea_equilibrio_mensual}"
+        f"{linea_utilidad_mensual}\n\n"
+        "🔍 *Nota:* Este cálculo asume que el número de tours y la ocupación promedio se mantienen estables "
+        "mes con mes; en la práctica, revísalo cada temporada."
+    )
 
 mensaje_emprendedor_tips = (
     "💡 *Tips financieros para tu negocio*\n\n"
@@ -1228,8 +1514,20 @@ mensaje_submenu_ahorro = (
     "💰 *Ahorro*\n\n"
     "1️⃣ ¿Cuánto debo apartar para lograr mi meta de ahorro?\n"
     "2️⃣ Consejos para ahorrar sin sufrir en el intento\n"
-    "3️⃣ ¿Dónde puedo comparar cuentas de ahorro entre bancos?\n\n"
+    "3️⃣ ¿Dónde puedo comparar cuentas de ahorro entre bancos?\n"
+    "4️⃣ Calculadora de presupuesto (regla 50/30/20)\n\n"
     "Escribe el número, o *menú* para regresar."
+)
+
+mensaje_intro_presupuesto = (
+    "📊 *Calculadora de presupuesto: regla 50/30/20*\n\n"
+    "Es una guía sencilla para organizar tu ingreso mensual en 3 partes:\n"
+    "🏠 50% a tus gastos necesarios (renta, comida, transporte, servicios)\n"
+    "🎉 30% a tus gustos (lo que quieras: salidas, streaming, ropa, etc.)\n"
+    "💰 20% a ahorro o pago de deudas\n\n"
+    "No tiene que ser exacta, pero te da un punto de partida. Vamos a calcular tus montos:\n\n"
+    "1️⃣ ¿Cuál es tu ingreso mensual neto? Es decir, lo que realmente recibes después de "
+    "impuestos: lo que te depositan o te dan en efectivo. (ejemplo: 12000)"
 )
 
 mensaje_submenu_credito = (
@@ -1243,7 +1541,8 @@ mensaje_submenu_credito = (
     "7️⃣ Identificar un crédito caro\n"
     "8️⃣ Errores comunes al pedir crédito\n"
     "9️⃣ Entender el Buró de Crédito\n"
-    "🔟 Tus derechos frente al cobro de deudas\n\n"
+    "🔟 Tus derechos frente al cobro de deudas\n"
+    "1️⃣1️⃣ Plan para pagar varias deudas (bola de nieve o avalancha)\n\n"
     "Escribe el número, o *menú* para regresar."
 )
 
@@ -1257,6 +1556,22 @@ mensaje_intro_pago_minimo = (
     "Vamos a calcular el tuyo y ver qué pasaría si solo pagaras el mínimo cada mes, sin volver "
     "a usar la tarjeta. Dime:\n\n"
     "1️⃣ ¿Cuál es el saldo actual (deuda) de tu tarjeta? (ejemplo: 18000)"
+)
+
+mensaje_intro_plan_deudas = (
+    "🎯 *Plan para pagar varias deudas*\n\n"
+    "Si tienes más de una deuda (tarjetas, préstamos, etc.), el orden en que las pagas sí "
+    "importa. Te muestro dos estrategias muy usadas:\n\n"
+    "❄️ *Bola de nieve*: primero liquidas la deuda con el saldo MÁS PEQUEÑO (sin importar su "
+    "tasa), y sigues con la siguiente. Psicológicamente ayuda mucho: vas viendo deudas "
+    "desaparecer rápido y eso motiva a seguir.\n\n"
+    "🏔️ *Avalancha*: primero liquidas la deuda con la tasa de interés MÁS ALTA. Matemáticamente "
+    "es la que menos intereses totales te hace pagar.\n\n"
+    "En ambas, sigues pagando el mínimo de todas tus demás deudas mientras tanto, y cuando "
+    "terminas de pagar una, ese dinero se suma al abono de la siguiente (por eso \"bola de "
+    "nieve\": va creciendo).\n\n"
+    "Vamos a comparar las dos con tus datos. ¿Cuántas deudas quieres incluir? (un número del 2 "
+    "al 6)"
 )
 
 mensaje_submenu_inversion = (
@@ -1565,7 +1880,7 @@ mensaje_ahorro_consejos = (
     "________________________________________\n"
     "✅ 2. Prueba la regla 50/30/20\n"
     "📌 Una guía sencilla para organizar tu ingreso: 50% a tus gastos necesarios (renta, comida, transporte), 30% a tus gustos, y 20% a ahorro o pago de deudas.\n"
-    "💡 No tiene que ser exacta, pero te da un punto de partida si no sabes por dónde empezar.\n"
+    "💡 No tiene que ser exacta, pero te da un punto de partida si no sabes por dónde empezar. Si quieres calcular tus montos exactos (y comparar contra lo que ya gastas), prueba la opción 4️⃣ Calculadora de presupuesto de este mismo menú.\n"
     "________________________________________\n"
     "✅ 3. Automatiza tu ahorro\n"
     "📌 Si tu banco lo permite, programa una transferencia automática a tu cuenta de ahorro justo cuando te paguen.\n"
@@ -2098,9 +2413,13 @@ def _procesar_mensaje_interno(mensaje, numero):
             "empc_credito_plazo", "empc_tasa_impositiva", "empc_utilidad_deseada", "empc_precio_prueba",
             "turismo_capacidad", "turismo_ocupacion", "turismo_costos_fijos", "turismo_costo_variable",
             "turismo_comision", "turismo_utilidad_deseada", "turismo_precio_prueba",
+            "turismo_quiere_mensual", "turismo_tours_mensuales", "turismo_costos_fijos_mensuales",
             "menu_impuestos", "impuestos_isr_sueldo", "impuestos_resico_ingreso", "impuestos_resico_gastos",
             "menu_proteccion", "feedback_resultado",
             "pago_minimo_saldo", "pago_minimo_limite", "pago_minimo_tasa",
+            "deudas_cantidad", "deudas_saldo", "deudas_tasa", "deudas_pago", "deudas_extra",
+            "presupuesto_ingreso", "presupuesto_comparar",
+            "presupuesto_gasto_necesidades", "presupuesto_gasto_gustos",
         ]:
             subflujo_critico = True
 
@@ -2202,6 +2521,19 @@ def _procesar_mensaje_interno(mensaje, numero):
         ]:
             estado_usuario[numero] = {"esperando": "pago_minimo_saldo"}
             return mensaje_intro_pago_minimo
+
+        if texto_limpio in [
+            "plan para pagar varias deudas", "bola de nieve", "avalancha",
+            "plan para pagar mis deudas", "pagar varias deudas",
+        ]:
+            estado_usuario[numero] = {"esperando": "deudas_cantidad"}
+            return mensaje_intro_plan_deudas
+
+        if texto_limpio in [
+            "calculadora de presupuesto", "regla 50/30/20", "50/30/20", "presupuesto",
+        ]:
+            estado_usuario[numero] = {"esperando": "presupuesto_ingreso"}
+            return mensaje_intro_presupuesto
 
         if texto_limpio in ["cuánto me pueden prestar", "¿cuánto me pueden prestar?"]:
             estado_usuario[numero] = {"esperando": "ingreso"}
@@ -2367,6 +2699,11 @@ def _procesar_mensaje_interno(mensaje, numero):
                 "comparar cuentas de ahorro",
             ]:
                 return mensaje_ahorro_comparar_cuentas
+            if texto_limpio in [
+                "4", "calculadora de presupuesto", "regla 50/30/20", "presupuesto",
+            ]:
+                contexto["esperando"] = "presupuesto_ingreso"
+                return mensaje_intro_presupuesto
             return "Por favor, elige una opción válida del menú de Ahorro, o escribe *menú* para regresar al inicio."
 
         # --- Submenú: Inversión ---
@@ -3013,7 +3350,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                 contexto["esperando"] = "turismo_precio_prueba"
                 return (
                     f"💲 Con esos datos, para ganar ${utilidad_deseada:,.2f} por salida, considerando que en "
-                    f"promedio van {personas_esperadas:,.1f} personas ({contexto['turismo_ocupacion']}% de "
+                    f"promedio van {personas_esperadas:,.0f} personas ({contexto['turismo_ocupacion']}% de "
                     f"tu capacidad de {contexto['turismo_capacidad']:,.0f}), necesitarías cobrar "
                     f"aproximadamente *${precio_sugerido:,.2f}* por persona.\n\n"
                     "¿A qué precio por persona tienes pensado cobrar realmente? Puedes usar este mismo "
@@ -3028,7 +3365,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                 precio_prueba = Decimal(mensaje.replace(",", "").replace("$", ""))
                 if precio_prueba <= 0:
                     return "El precio debe ser mayor a cero. ¿A qué precio por persona tienes pensado cobrar?"
-                resultado = calcular_resultado_turismo(
+                resultado, es_viable, margen_persona = calcular_resultado_turismo(
                     contexto["turismo_capacidad"],
                     contexto["turismo_costos_fijos"],
                     contexto["turismo_costo_variable"],
@@ -3036,9 +3373,64 @@ def _procesar_mensaje_interno(mensaje, numero):
                     contexto["turismo_personas_esperadas"],
                     precio_prueba,
                 )
-                return _con_feedback(numero, "emprendedor_turismo", resultado, "menu_emprendedor", mensaje_submenu_emprendedor)
+                contexto["turismo_resultado_base"] = resultado
+                if not es_viable:
+                    return _con_feedback(numero, "emprendedor_turismo", resultado, "menu_emprendedor", mensaje_submenu_emprendedor)
+
+                contexto["turismo_margen_persona"] = margen_persona
+                contexto["esperando"] = "turismo_quiere_mensual"
+                return (
+                    resultado
+                    + "\n\n________________________________________\n"
+                    "¿Quieres ver esto también a nivel MENSUAL, es decir, cuántos tours necesitas dar al mes "
+                    "para cubrir los costos fijos generales de tu negocio (renta de oficina, sueldos fijos, "
+                    "seguros, licencias, etc.)? Responde *sí* o *no*."
+                )
             except:
                 return "Por favor, indica el precio como un número (ejemplo: 60)."
+
+        if contexto["esperando"] == "turismo_quiere_mensual":
+            if texto_limpio in ["no", "2"]:
+                return _con_feedback(
+                    numero, "emprendedor_turismo", contexto["turismo_resultado_base"],
+                    "menu_emprendedor", mensaje_submenu_emprendedor,
+                )
+            if texto_limpio in ["si", "sí", "1"]:
+                contexto["esperando"] = "turismo_tours_mensuales"
+                return "1️⃣ ¿Cuántos tours o experiencias das (o planeas dar) al mes en promedio? (ejemplo: 12)"
+            return "Por favor, responde *sí* o *no*: ¿quieres ver el punto de equilibrio mensual de tu negocio?"
+
+        if contexto["esperando"] == "turismo_tours_mensuales":
+            try:
+                tours_mensuales = Decimal(mensaje.replace(",", ""))
+                if tours_mensuales <= 0:
+                    return "Ese número debe ser mayor a cero. ¿Cuántos tours das al mes en promedio?"
+                contexto["turismo_tours_mensuales"] = tours_mensuales
+                contexto["esperando"] = "turismo_costos_fijos_mensuales"
+                return (
+                    "2️⃣ Aparte de los costos fijos por salida que ya me diste, ¿tienes otros costos fijos "
+                    "MENSUALES del negocio en general (renta de oficina, sueldos fijos, seguros, licencias, "
+                    "etc.)? Si no, escribe 0. (ejemplo: 5000)"
+                )
+            except:
+                return "Por favor, indica el número de tours al mes (ejemplo: 12)."
+
+        if contexto["esperando"] == "turismo_costos_fijos_mensuales":
+            try:
+                costos_fijos_mensuales = Decimal(mensaje.replace(",", ""))
+                if costos_fijos_mensuales < 0:
+                    return "Ese número no puede ser negativo 🙂 Si no aplica, escribe 0."
+                texto_mensual = calcular_punto_equilibrio_mensual_turismo(
+                    contexto["turismo_margen_persona"],
+                    contexto["turismo_personas_esperadas"],
+                    contexto["turismo_costos_fijos"],
+                    contexto["turismo_tours_mensuales"],
+                    costos_fijos_mensuales,
+                )
+                resultado_final = contexto["turismo_resultado_base"] + texto_mensual
+                return _con_feedback(numero, "emprendedor_turismo", resultado_final, "menu_emprendedor", mensaje_submenu_emprendedor)
+            except:
+                return "Por favor, indica tus costos fijos mensuales del negocio como un número (ejemplo: 5000, o 0 si no aplica)."
 
         # --- Submenú: Impuestos y cómo afectan tus finanzas ---
         if contexto["esperando"] == "menu_impuestos":
@@ -3245,7 +3637,10 @@ def _procesar_mensaje_interno(mensaje, numero):
                 ) + "\n" + mensaje_submenu_credito
             if texto_limpio == "10":
                 return mensaje_credito_derechos_cobranza
-            return "Por favor, elige un número del 1 al 10 del menú de Crédito, o escribe *menú* para regresar al inicio."
+            if texto_limpio == "11":
+                estado_usuario[numero] = {"esperando": "deudas_cantidad"}
+                return mensaje_intro_plan_deudas
+            return "Por favor, elige un número del 1 al 11 del menú de Crédito, o escribe *menú* para regresar al inicio."
 
         # --- Crédito: pago mínimo de tarjeta ---
         if contexto["esperando"] == "pago_minimo_saldo":
@@ -3329,6 +3724,309 @@ def _procesar_mensaje_interno(mensaje, numero):
                 return _con_feedback(numero, "pago_minimo_tarjeta", resultado)
             except Exception as e:
                 print(f"Error al calcular pago mínimo: {e}")
+                return "Uy, algo no cuadró con esos datos 🤔 Revisa que hayas escrito solo números y vuelve a intentarlo, o escribe *menú* para empezar de nuevo."
+
+        # --- Crédito: plan para pagar varias deudas (bola de nieve / avalancha) ---
+        if contexto["esperando"] == "deudas_cantidad":
+            try:
+                cantidad = int(mensaje.strip())
+                if cantidad < 2 or cantidad > 6:
+                    return "Por favor, dame un número entre 2 y 6 deudas. ¿Cuántas deudas quieres incluir?"
+                contexto["deudas_total"] = cantidad
+                contexto["deudas_idx"] = 0
+                contexto["deudas_lista"] = []
+                contexto["esperando"] = "deudas_saldo"
+                return (
+                    f"Perfecto, vamos a capturar tus {cantidad} deudas una por una.\n\n"
+                    "📋 *Deuda 1*\n"
+                    "1️⃣ ¿Cuál es el saldo actual (lo que debes) de esta deuda? (ejemplo: 12000)"
+                )
+            except:
+                return "Por favor, indica cuántas deudas quieres incluir con un número del 2 al 6."
+
+        if contexto["esperando"] == "deudas_saldo":
+            try:
+                saldo = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if saldo <= 0:
+                    return "El saldo debe ser mayor a cero. ¿Cuál es el saldo actual de esta deuda?"
+                contexto["deudas_actual"] = {"saldo": saldo}
+                contexto["esperando"] = "deudas_tasa"
+                return "2️⃣ ¿Cuál es la tasa de interés ANUAL de esta deuda? (ejemplo: si es 45% anual, escribe 45)"
+            except:
+                return "Por favor, indica el saldo como un número (ejemplo: 12000)."
+
+        if contexto["esperando"] == "deudas_tasa":
+            try:
+                tasa = Decimal(mensaje.replace(",", "").replace("%", ""))
+                if tasa < 0:
+                    return "La tasa de interés no puede ser negativa. ¿Cuál es la tasa de interés ANUAL de esta deuda?"
+                contexto["deudas_actual"]["tasa_anual"] = tasa
+                contexto["esperando"] = "deudas_pago"
+                return "3️⃣ ¿Cuánto pagas de mínimo cada mes por esta deuda? (ejemplo: 800)"
+            except:
+                return "Por favor, indica la tasa de interés como un número (ejemplo: 45)."
+
+        if contexto["esperando"] == "deudas_pago":
+            try:
+                pago_minimo = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if pago_minimo <= 0:
+                    return "El pago mínimo debe ser mayor a cero. ¿Cuánto pagas de mínimo cada mes por esta deuda?"
+                contexto["deudas_actual"]["pago_minimo"] = pago_minimo
+                contexto["deudas_lista"].append(contexto["deudas_actual"])
+                contexto["deudas_actual"] = {}
+                contexto["deudas_idx"] += 1
+
+                if contexto["deudas_idx"] < contexto["deudas_total"]:
+                    contexto["esperando"] = "deudas_saldo"
+                    return (
+                        f"📋 *Deuda {contexto['deudas_idx'] + 1}*\n"
+                        "1️⃣ ¿Cuál es el saldo actual (lo que debes) de esta deuda? (ejemplo: 12000)"
+                    )
+
+                contexto["esperando"] = "deudas_extra"
+                return (
+                    "Ya tengo tus deudas. Última pregunta:\n\n"
+                    "4️⃣ Además de los mínimos, ¿cuánto dinero EXTRA puedes destinar cada mes a pagar deudas? "
+                    "(si no puedes dar nada extra por ahora, escribe 0)"
+                )
+            except:
+                return "Por favor, indica el pago mínimo mensual como un número (ejemplo: 800)."
+
+        if contexto["esperando"] == "deudas_extra":
+            try:
+                extra_mensual = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if extra_mensual < 0:
+                    return "El abono extra no puede ser negativo. ¿Cuánto puedes destinar cada mes, además de los mínimos? (si nada, escribe 0)"
+
+                deudas_lista = contexto["deudas_lista"]
+                n = len(deudas_lista)
+
+                orden_nieve = sorted(range(n), key=lambda i: deudas_lista[i]["saldo"])
+                orden_avalancha = sorted(range(n), key=lambda i: deudas_lista[i]["tasa_anual"], reverse=True)
+
+                meses_n, pagado_n, interes_n, liq_n, tope_n = _simular_estrategia_deudas(
+                    deudas_lista, extra_mensual, orden_nieve
+                )
+                meses_a, pagado_a, interes_a, liq_a, tope_a = _simular_estrategia_deudas(
+                    deudas_lista, extra_mensual, orden_avalancha
+                )
+
+                lineas_deudas = "\n".join(
+                    f"  Deuda {i + 1}: saldo ${float(d['saldo']):,.2f}, tasa {d['tasa_anual']}% anual, "
+                    f"mínimo ${float(d['pago_minimo']):,.2f}/mes"
+                    for i, d in enumerate(deudas_lista)
+                )
+                orden_nieve_texto = " → ".join(f"Deuda {i + 1}" for i in orden_nieve)
+                orden_avalancha_texto = " → ".join(f"Deuda {i + 1}" for i in orden_avalancha)
+
+                if tope_n or tope_a:
+                    resultado = (
+                        f"📋 Tus deudas:\n{lineas_deudas}\n\n"
+                        "😬 Con estos números (tus mínimos actuales más el abono extra que diste), no alcanzarías "
+                        "a liquidar todas tus deudas ni en 50 años con ninguna de las dos estrategias: lo que "
+                        "pagas apenas cubre los intereses.\n\n"
+                        "💡 Necesitas aumentar el abono extra mensual, o algunos de los mínimos, para realmente "
+                        "avanzar. Prueba de nuevo con un abono extra mayor.\n\n"
+                        "Escribe *menú* para volver al inicio."
+                    )
+                    return _con_feedback(numero, "plan_deudas", resultado)
+
+                anios_n = round(meses_n / 12, 1)
+                anios_a = round(meses_a / 12, 1)
+                diferencia_interes = interes_n - interes_a
+
+                if meses_n == meses_a and interes_n == interes_a:
+                    comparacion = (
+                        "En tu caso, con solo una deuda o con montos muy parecidos, ambas estrategias te dan "
+                        "prácticamente el mismo resultado."
+                    )
+                elif interes_a <= interes_n:
+                    comparacion = (
+                        f"🏔️ *La avalancha te ahorra ${float(diferencia_interes):,.2f} en intereses* respecto a la "
+                        "bola de nieve, por atacar primero la tasa más cara.\n"
+                        "❄️ La bola de nieve puede tardar lo mismo o un poco más, pero como vas liquidando "
+                        "primero las deudas más chicas, para muchas personas es más fácil mantener la disciplina "
+                        "para seguirla."
+                    )
+                else:
+                    comparacion = (
+                        f"❄️ En tu caso, la bola de nieve incluso te ahorra ${float(-diferencia_interes):,.2f} en "
+                        "intereses respecto a la avalancha, además de la ventaja de motivación de ir liquidando "
+                        "deudas chicas primero."
+                    )
+
+                resultado = (
+                    f"📋 Tus deudas:\n{lineas_deudas}\n\n"
+                    "________________________________________\n"
+                    "❄️ *Estrategia bola de nieve* (primero la de menor saldo)\n"
+                    f"Orden sugerido: {orden_nieve_texto}\n"
+                    f"📆 Quedarías libre de deudas en {meses_n} meses ({anios_n} años).\n"
+                    f"💰 Pagarías en total ${float(pagado_n):,.2f}, de los cuales ${float(interes_n):,.2f} son "
+                    "intereses.\n"
+                    "________________________________________\n"
+                    "🏔️ *Estrategia avalancha* (primero la tasa más alta)\n"
+                    f"Orden sugerido: {orden_avalancha_texto}\n"
+                    f"📆 Quedarías libre de deudas en {meses_a} meses ({anios_a} años).\n"
+                    f"💰 Pagarías en total ${float(pagado_a):,.2f}, de los cuales ${float(interes_a):,.2f} son "
+                    "intereses.\n"
+                    "________________________________________\n"
+                    f"{comparacion}\n\n"
+                    "💡 En ambos casos, sigue pagando el mínimo de todas tus deudas cada mes, y concentra el "
+                    "abono extra en la deuda que va primero en el orden sugerido. Cuando la liquides, usa ese "
+                    "dinero (mínimo + extra) para la siguiente de la lista.\n\n"
+                    "Escribe *menú* para volver al inicio."
+                )
+                return _con_feedback(numero, "plan_deudas", resultado)
+            except Exception as e:
+                print(f"Error al calcular el plan de pago de deudas: {e}")
+                return "Uy, algo no cuadró con esos datos 🤔 Revisa que hayas escrito solo números y vuelve a intentarlo, o escribe *menú* para empezar de nuevo."
+
+        # --- Ahorro: calculadora de presupuesto (regla 50/30/20) ---
+        if contexto["esperando"] == "presupuesto_ingreso":
+            try:
+                ingreso = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if ingreso <= 0:
+                    return "El ingreso debe ser mayor a cero. ¿Cuál es tu ingreso mensual neto?"
+                contexto["presupuesto_ingreso"] = ingreso
+                necesidades = (ingreso * Decimal("0.50")).quantize(Decimal("0.01"))
+                gustos = (ingreso * Decimal("0.30")).quantize(Decimal("0.01"))
+                ahorro = (ingreso * Decimal("0.20")).quantize(Decimal("0.01"))
+                contexto["esperando"] = "presupuesto_comparar"
+                return (
+                    f"Con un ingreso mensual de ${float(ingreso):,.2f}, la regla 50/30/20 sugiere:\n\n"
+                    f"🏠 Gastos necesarios (50%): ${float(necesidades):,.2f}\n"
+                    f"🎉 Gustos (30%): ${float(gustos):,.2f}\n"
+                    f"💰 Ahorro o pago de deudas (20%): ${float(ahorro):,.2f}\n\n"
+                    "¿Quieres comparar esto con lo que gastas actualmente en cada categoría? Responde *sí* o "
+                    "*no*."
+                )
+            except:
+                return "Por favor, indica tu ingreso mensual neto como un número (ejemplo: 12000)."
+
+        if contexto["esperando"] == "presupuesto_comparar":
+            if texto_limpio in ["si", "sí", "1"]:
+                contexto["esperando"] = "presupuesto_gasto_necesidades"
+                return (
+                    "Perfecto. Piensa en un mes normal:\n\n"
+                    "1️⃣ ¿Cuánto gastas aproximadamente al mes en gastos necesarios (renta o hipoteca, comida, "
+                    "transporte, servicios)? (ejemplo: 7000)"
+                )
+            if texto_limpio in ["no", "2"]:
+                ingreso = contexto["presupuesto_ingreso"]
+                necesidades = (ingreso * Decimal("0.50")).quantize(Decimal("0.01"))
+                gustos = (ingreso * Decimal("0.30")).quantize(Decimal("0.01"))
+                ahorro = (ingreso * Decimal("0.20")).quantize(Decimal("0.01"))
+                resultado = (
+                    f"📊 Resumen de tu presupuesto sugerido (ingreso de ${float(ingreso):,.2f}):\n\n"
+                    f"🏠 Gastos necesarios (50%): ${float(necesidades):,.2f}\n"
+                    f"🎉 Gustos (30%): ${float(gustos):,.2f}\n"
+                    f"💰 Ahorro o pago de deudas (20%): ${float(ahorro):,.2f}\n\n"
+                    "💡 No tiene que ser exacto: es un punto de partida para organizar tu dinero. Si quieres, "
+                    "en la opción 1️⃣ de *Ahorro* puedo ayudarte a calcular cuánto apartar para una meta "
+                    f"específica con esos ${float(ahorro):,.2f} de ahorro.\n\n"
+                    "Escribe *menú* para volver al inicio."
+                )
+                return _con_feedback(numero, "presupuesto", resultado)
+            return "Por favor, responde *sí* o *no*: ¿quieres comparar con lo que gastas actualmente?"
+
+        if contexto["esperando"] == "presupuesto_gasto_necesidades":
+            try:
+                gasto_necesidades = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if gasto_necesidades < 0:
+                    return "El gasto no puede ser negativo. ¿Cuánto gastas al mes en gastos necesarios?"
+                contexto["presupuesto_gasto_necesidades"] = gasto_necesidades
+                contexto["esperando"] = "presupuesto_gasto_gustos"
+                return (
+                    "2️⃣ ¿Cuánto gastas aproximadamente al mes en tus gustos (salidas, streaming, ropa, "
+                    "antojos, etc.)? (ejemplo: 2500)"
+                )
+            except:
+                return "Por favor, indica ese gasto como un número (ejemplo: 7000)."
+
+        if contexto["esperando"] == "presupuesto_gasto_gustos":
+            try:
+                gasto_gustos = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if gasto_gustos < 0:
+                    return "El gasto no puede ser negativo. ¿Cuánto gastas al mes en tus gustos?"
+
+                ingreso = contexto["presupuesto_ingreso"]
+                gasto_necesidades = contexto["presupuesto_gasto_necesidades"]
+                necesidades_rec = (ingreso * Decimal("0.50")).quantize(Decimal("0.01"))
+                gustos_rec = (ingreso * Decimal("0.30")).quantize(Decimal("0.01"))
+                ahorro_rec = (ingreso * Decimal("0.20")).quantize(Decimal("0.01"))
+                ahorro_real = (ingreso - gasto_necesidades - gasto_gustos).quantize(Decimal("0.01"))
+
+                pct_necesidades = (gasto_necesidades / ingreso * 100).quantize(Decimal("0.1"))
+                pct_gustos = (gasto_gustos / ingreso * 100).quantize(Decimal("0.1"))
+                pct_ahorro = (ahorro_real / ingreso * 100).quantize(Decimal("0.1"))
+
+                # Un pequeño margen (5 puntos porcentuales) para no marcar como
+                # "fuera de la regla" algo que está prácticamente en el objetivo.
+                semaforo_necesidades = "🟢" if gasto_necesidades <= necesidades_rec * Decimal("1.1") else "🔴"
+                semaforo_gustos = "🟢" if gasto_gustos <= gustos_rec * Decimal("1.1") else "🔴"
+                if ahorro_real < 0:
+                    semaforo_ahorro = "🔴"
+                elif ahorro_real >= ahorro_rec:
+                    semaforo_ahorro = "🟢"
+                else:
+                    semaforo_ahorro = "🟡"
+
+                # Si el "ahorro" salió negativo (gastó más de lo que ingresa), se
+                # muestra con el signo antes del $ (-$2,000.00) en vez de después
+                # ($-2,000.00), que se lee raro.
+                texto_ahorro_real = (
+                    f"-${abs(float(ahorro_real)):,.2f}" if ahorro_real < 0 else f"${float(ahorro_real):,.2f}"
+                )
+                comparacion = (
+                    "📊 *Comparación con la regla 50/30/20*\n\n"
+                    f"🏠 Gastos necesarios: gastas ${float(gasto_necesidades):,.2f} ({pct_necesidades}%) vs. "
+                    f"${float(necesidades_rec):,.2f} (50%) sugerido {semaforo_necesidades}\n"
+                    f"🎉 Gustos: gastas ${float(gasto_gustos):,.2f} ({pct_gustos}%) vs. ${float(gustos_rec):,.2f} "
+                    f"(30%) sugerido {semaforo_gustos}\n"
+                    f"💰 Te queda para ahorro o deudas: {texto_ahorro_real} ({pct_ahorro}%) vs. "
+                    f"${float(ahorro_rec):,.2f} (20%) sugerido {semaforo_ahorro}\n\n"
+                )
+
+                if ahorro_real < 0:
+                    observacion = (
+                        "😬 Según lo que me dijiste, estás gastando más de lo que ingresas cada mes, lo cual "
+                        "solo es posible si estás usando ahorros o endeudándote. Si tienes deudas, dentro de "
+                        "*Crédito* tengo una calculadora (opción 1️⃣1️⃣) para armar un plan y salir de ellas en "
+                        "orden."
+                    )
+                elif semaforo_necesidades == "🔴":
+                    observacion = (
+                        "💡 Tus gastos necesarios están bastante por encima del 50% sugerido. Vale la pena "
+                        "revisar si hay algo ahí que se pueda reducir (por ejemplo, comparar si hay opciones "
+                        "más baratas de transporte o servicios), porque eso es lo que más limita cuánto puedes "
+                        "ahorrar."
+                    )
+                elif semaforo_gustos == "🔴":
+                    observacion = (
+                        "💡 Tus gustos están por encima del 30% sugerido. No se trata de eliminarlos, sino de "
+                        "tenerlos identificados: a veces basta con ponerles un tope mensual."
+                    )
+                elif semaforo_ahorro == "🟢":
+                    observacion = (
+                        "🎉 Vas muy bien: estás ahorrando (o pagando deudas) igual o más de lo que sugiere la "
+                        "regla. Si quieres, en la opción 1️⃣ de *Ahorro* puedo ayudarte a ponerle una meta "
+                        "concreta a ese dinero."
+                    )
+                else:
+                    observacion = (
+                        "💡 Vas encaminado/a, aunque el ahorro te quedó un poco por debajo del 20% sugerido. "
+                        "No hace falta que sea perfecto desde el primer mes: puedes ir subiendo el porcentaje "
+                        "poco a poco."
+                    )
+
+                resultado = (
+                    comparacion
+                    + observacion
+                    + "\n\nEscribe *menú* para volver al inicio."
+                )
+                return _con_feedback(numero, "presupuesto", resultado)
+            except Exception as e:
+                print(f"Error al calcular el presupuesto: {e}")
                 return "Uy, algo no cuadró con esos datos 🤔 Revisa que hayas escrito solo números y vuelve a intentarlo, o escribe *menú* para empezar de nuevo."
 
         # --- Ahorro: flujo de meta de ahorro ---
@@ -4129,6 +4827,14 @@ def procesar_mensaje(mensaje, numero):
     la piden después, y registra (de forma anónima) el cambio de paso para
     la analítica de uso.
     """
+    # Si esta persona no está en memoria, puede ser realmente nueva, o puede
+    # ser que el servicio se haya reiniciado a la mitad de su conversación:
+    # antes de asumir lo primero, intentamos recuperar su estado guardado.
+    if numero not in estado_usuario:
+        estado_recuperado = _cargar_estado_sesion(numero)
+        if estado_recuperado is not None:
+            estado_usuario[numero] = estado_recuperado
+
     texto_limpio = _MODIFICADORES_EMOJI_RE.sub('', _BORDE_PUNTUACION_RE.sub('', mensaje).lower())
     if es_peticion_explicar_mas_facil(texto_limpio):
         estado_actual = estado_usuario.get(numero, {}).get("esperando")
@@ -4144,6 +4850,7 @@ def procesar_mensaje(mensaje, numero):
 
     respuesta = _procesar_mensaje_interno(mensaje, numero)
     _ultimo_mensaje_bot[numero] = respuesta
+    _guardar_estado_sesion(numero)
 
     estado_despues = estado_usuario.get(numero, {}).get("esperando")
     if es_primer_contacto or estado_antes != estado_despues:
