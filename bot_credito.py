@@ -337,15 +337,6 @@ MENSAJE_FRECUENCIA_INVERSION = (
     "5️⃣ Otra frecuencia (tú me dices cuántas veces al año)"
 )
 
-MENSAJE_FRECUENCIA_JUBILACION = (
-    "¿Con qué frecuencia vas a ahorrar para tu retiro?\n"
-    "1️⃣ Mensual\n"
-    "2️⃣ Quincenal (cada 15 días)\n"
-    "3️⃣ Catorcenal (cada 14 días)\n"
-    "4️⃣ Semanal\n"
-    "5️⃣ Otra frecuencia (tú me dices cuántas veces al año)"
-)
-
 MENSAJE_FRECUENCIA_EMPRENDEDOR = (
     "Antes de empezar, dime cada cuánto quieres analizar tu negocio (por ejemplo, cuánto vendes y gastas "
     "por semana, o por mes; tú eliges). Esto es importante porque, si más adelante me dices que tienes un "
@@ -852,82 +843,106 @@ def calcular_crecimiento_inversion(monto_inicial, aportacion_periodica, anios, t
         return f"❌ Error al calcular: {e}"
 
 # =========================================
-# Jubilación: meta de ahorro para el retiro
+# Jubilación: ahorro voluntario con la fórmula oficial de CONSAR/Afore
 # =========================================
-def calcular_ahorro_jubilacion(meta, ahorro_actual, anios, tasa_anual_pct, periodos_por_anio, frecuencia_label):
-    """
-    Dado cuánto quiere tener una persona ahorrado para su retiro, cuánto tiene
-    ya ahorrado para ese fin, un rendimiento anual esperado, un plazo y una
-    frecuencia de aportación, calcula cuánto necesita aportar en cada periodo
-    para llegar a su meta. A diferencia de Ahorro (que es un cálculo simple,
-    sin intereses), aquí SÍ se asume un rendimiento compuesto sobre el dinero
-    que ya tiene y sobre lo que va aportando, igual que en Inversión, pero
-    resolviendo la aportación necesaria en vez de calcular el resultado final.
+# Metodología tomada tal cual de la nota "¿Cómo funciona la calculadora de
+# ahorro voluntario?" de CONSAR (la misma que usan las Afores para estimar
+# el saldo y la pensión a partir de aportaciones voluntarias):
+#
+#   Sf = Si(1+r^(m))^n(1-c^(m))^n + Av^(m) [ ((1+r^(m))^n(1-c^(m))^n - 1) / ((1+r^(m))(1+c^(m)) - 1) ]
+#
+# donde r^(m) es el rendimiento mensual equivalente al rendimiento anual
+# esperado, y c^(m) es la comisión mensual de las SIEFORE adicionales. A
+# partir de Sf se estima la pensión mensual del primer año de un Retiro
+# Programado: Mensualidad = Sf / (12 * URV).
+#
+# A diferencia de la anterior calculadora de "meta de ahorro" (que resolvía
+# cuánto aportar para llegar a una meta), aquí se parte de una aportación
+# mensual fija que la persona ya decidió, y se calcula a dónde llegaría con
+# ella: es el mismo enfoque que la calculadora real de una Afore.
 
-    Nota: esto NO es un estimador oficial de pensión del IMSS/ISSSTE ni de
-    ninguna Afore; es una calculadora de meta de ahorro para el retiro,
-    pensada solo con fines educativos.
+# Comisión anual promedio vigente de las SIEFORE adicionales, confirmada
+# por Jazmín el 17/sep/2026. CONSAR la actualiza de vez en cuando: si ha
+# pasado mucho tiempo desde esa fecha, conviene verificarla de nuevo en
+# https://www.gob.mx/consar.
+COMISION_ANUAL_SIEFORE_ADICIONALES = Decimal("0.57")  # %
+
+# URV (Unidad de Renta Vitalicia) para un Ahorrador activo sin
+# beneficiarios, vigente desde el 14 de septiembre de 2026 (la semana más
+# reciente publicada al momento de programar esto), tomada del archivo
+# oficial de CONSAR ("URV_2026.xls", hoja "2026_Activos"). La URV cambia
+# CADA SEMANA: si ha pasado mucho tiempo desde esa fecha, hay que
+# actualizar esta tabla con el archivo vigente de CONSAR (Anexo C de las
+# Disposiciones de carácter general aplicables a los retiros programados).
+URV_VIGENTE = {
+    60: {"hombre": Decimal("12.769161862147167"), "mujer": Decimal("14.03584217632955")},
+    65: {"hombre": Decimal("11.689588383089918"), "mujer": Decimal("12.85693833274364")},
+    67: {"hombre": Decimal("11.231904072367147"), "mujer": Decimal("12.334432614743635")},
+}
+
+def calcular_ahorro_voluntario_afore(saldo_actual, edad_actual, edad_retiro, genero, aportacion_mensual, tasa_anual_pct):
+    """
+    Implementa la fórmula oficial de CONSAR descrita arriba. edad_actual y
+    edad_retiro se dan en años completos (edad_retiro debe ser 60, 65 o 67,
+    las únicas edades para las que tenemos tabla de URV); n (meses que
+    faltan) se aproxima como (edad_retiro - edad_actual) * 12.
     """
     try:
-        meta = Decimal(str(meta))
-        ahorro_actual = Decimal(str(ahorro_actual))
+        saldo_actual = Decimal(str(saldo_actual))
+        aportacion_mensual = Decimal(str(aportacion_mensual))
         tasa_anual_pct = Decimal(str(tasa_anual_pct))
 
-        if meta <= 0:
+        n = (edad_retiro - edad_actual) * 12
+        if n <= 0:
             return (
-                "Uy, algo no cuadró con esos datos 🤔 La meta debe ser mayor a cero. Escribe *menú* "
-                "para empezar de nuevo."
-            )
-        if ahorro_actual < 0:
-            return "Ese número no puede ser negativo 🙂 Si no tienes nada ahorrado todavía para tu retiro, escribe 0."
-        if tasa_anual_pct < 0:
-            return "La tasa de rendimiento esperada no puede ser negativa para este cálculo 🙂 Indica un número positivo (ejemplo: 8)."
-
-        plazo, tasa_periodo = calcular_plazo_y_tasa_periodo(anios, tasa_anual_pct, periodos_por_anio)
-        if plazo <= 0:
-            return "El tiempo debe ser mayor a cero. Escribe *menú* para intentarlo de nuevo."
-
-        fv_ahorro_actual = ahorro_actual * (Decimal("1") + tasa_periodo) ** plazo
-
-        if fv_ahorro_actual >= meta:
-            return (
-                f"🎉 ¡Buena noticia! Si tu ahorro actual de ${ahorro_actual:,.2f} sigue generando un "
-                f"rendimiento aproximado del {tasa_anual_pct}% anual, para dentro de {plazo} periodos "
-                f"llegaría a unos ${fv_ahorro_actual.quantize(Decimal('0.01')):,.2f}, lo cual ya alcanza "
-                f"tu meta de ${meta:,.2f} sin necesidad de aportar más 🙌\n\n"
-                "🔍 *Nota:* Esto asume que el rendimiento se mantiene constante todo el tiempo, lo cual no "
-                "siempre pasa en la vida real. Revisa tu plan cada cierto tiempo para confirmar que sigue "
-                "en curso.\n\n"
-                "Escribe *menú* para volver al inicio."
+                "Tu edad de retiro debe ser mayor a tu edad actual. Escribe *menú* para intentarlo de nuevo "
+                "con otros datos."
             )
 
-        monto_faltante_fv = meta - fv_ahorro_actual
-        if tasa_periodo == 0:
-            aporte_por_periodo = (monto_faltante_fv / Decimal(plazo)).quantize(Decimal("0.01"))
+        r_anual = tasa_anual_pct / Decimal("100")
+        r_m = (Decimal("1") + r_anual) ** (Decimal("1") / Decimal("12")) - Decimal("1")
+        c_m = (COMISION_ANUAL_SIEFORE_ADICIONALES / Decimal("100")) / Decimal("12")
+
+        factor_combinado = (Decimal("1") + r_m) ** n * (Decimal("1") - c_m) ** n
+        total_por_saldo_actual = saldo_actual * factor_combinado
+
+        denominador = (Decimal("1") + r_m) * (Decimal("1") + c_m) - Decimal("1")
+        if denominador == 0:
+            total_por_aportaciones = aportacion_mensual * Decimal(n)
         else:
-            factor_anualidad = ((Decimal("1") + tasa_periodo) ** plazo - Decimal("1")) / tasa_periodo
-            aporte_por_periodo = (monto_faltante_fv / factor_anualidad).quantize(Decimal("0.01"))
+            total_por_aportaciones = aportacion_mensual * (factor_combinado - Decimal("1")) / denominador
 
-        total_aportado = (ahorro_actual + aporte_por_periodo * Decimal(plazo)).quantize(Decimal("0.01"))
-        rendimiento_generado = (meta - total_aportado).quantize(Decimal("0.01"))
+        saldo_final = (total_por_saldo_actual + total_por_aportaciones).quantize(Decimal("0.01"))
+
+        urv = URV_VIGENTE[edad_retiro][genero]
+        pension_mensual = (saldo_final / (Decimal("12") * urv)).quantize(Decimal("0.01"))
+
+        total_aportado_bolsillo = (aportacion_mensual * Decimal(n)).quantize(Decimal("0.01"))
+        rendimiento_generado = (saldo_final - saldo_actual - total_aportado_bolsillo).quantize(Decimal("0.01"))
 
         return (
-            "📌 Resultado de tu plan para el retiro:\n"
-            f"💰 Meta: ${meta:,.2f}\n"
-            f"🏦 Ya tienes ahorrado para esto: ${ahorro_actual:,.2f}\n"
-            f"📆 Tiempo: {plazo} periodos, ahorrando de forma {frecuencia_label}\n"
-            f"📈 Rendimiento anual esperado: {tasa_anual_pct}%\n\n"
-            f"✅ Necesitas aportar ${aporte_por_periodo:,.2f} en cada periodo para lograrlo.\n"
-            f"🧮 De ese total, aproximadamente ${total_aportado:,.2f} saldría de tu bolsillo y "
-            f"${rendimiento_generado:,.2f} vendría del rendimiento generado con el tiempo.\n\n"
-            "🔍 *Nota:* Este cálculo asume un rendimiento constante durante todo el plazo, lo cual no "
-            "siempre pasa en la vida real, y es solo una calculadora de meta de ahorro, no un "
-            "estimador oficial de tu pensión del IMSS, ISSSTE ni de tu Afore. Úsalo como referencia para "
-            "planear, no como una cifra garantizada.\n\n"
+            "📌 Resultado de tu ahorro voluntario para el retiro:\n"
+            f"🏦 Saldo actual de tu cuenta individual: ${saldo_actual:,.2f}\n"
+            f"📆 Edad actual: {edad_actual} años · Edad de retiro: {edad_retiro} años ({n} meses)\n"
+            f"💵 Aportación voluntaria mensual: ${aportacion_mensual:,.2f}\n"
+            f"📈 Rendimiento anual esperado: {tasa_anual_pct}%\n"
+            f"🏷️ Comisión anual de SIEFORE adicionales: {COMISION_ANUAL_SIEFORE_ADICIONALES}%\n\n"
+            f"✅ Saldo estimado al retiro: ${saldo_final:,.2f}\n"
+            f"🧮 De ese total, ${total_aportado_bolsillo:,.2f} saldría de tus aportaciones mensuales (sin "
+            f"contar tu saldo actual) y ${rendimiento_generado:,.2f} vendría del rendimiento generado, ya "
+            "descontando comisiones.\n\n"
+            f"💰 Pensión mensual estimada (primer año de un Retiro Programado): ${pension_mensual:,.2f}\n\n"
+            "🔍 *Nota:* Este cálculo usa la misma metodología que la calculadora oficial de ahorro voluntario "
+            "de tu Afore, con la comisión vigente de las SIEFORE adicionales y la Unidad de Renta Vitalicia "
+            "(URV) más reciente que tenemos disponible. La pensión mensual es solo ilustrativa: si cotizas en "
+            "el IMSS o el ISSSTE, tu pensión real se calcula con la normativa de esos institutos, no con este "
+            "monto. Además, la comisión y la URV cambian con el tiempo, así que para un número exacto siempre "
+            "confirma en la app o página de tu Afore.\n\n"
             "Escribe *menú* para volver al inicio."
         )
     except Exception as e:
         return f"❌ Error al calcular: {e}"
+
 
 # =========================================
 # Herramientas para el emprendedor: precio de venta y punto de equilibrio
@@ -2428,9 +2443,8 @@ def _procesar_mensaje_interno(mensaje, numero):
             "inversion_monto_inicial", "inversion_aportacion", "inversion_tasa_anual",
             "inversion_tiempo_numero", "inversion_tiempo_unidad",
             "inversion_frecuencia", "inversion_frecuencia_otro",
-            "jubilacion_meta", "jubilacion_ahorro_actual", "jubilacion_tasa_anual",
-            "jubilacion_tiempo_numero", "jubilacion_tiempo_unidad",
-            "jubilacion_frecuencia", "jubilacion_frecuencia_otro",
+            "jubilacion_saldo_actual", "jubilacion_edad_actual", "jubilacion_edad_retiro",
+            "jubilacion_genero", "jubilacion_aportacion_mensual", "jubilacion_rendimiento_anual",
             "menu_salud", "salud_pregunta", "menu_genero",
             "menu_emprendedor", "emprendedor_unidades", "emprendedor_costo_unitario",
             "emprendedor_costos_fijos", "emprendedor_utilidad_deseada", "emprendedor_precio_prueba",
@@ -2775,10 +2789,14 @@ def _procesar_mensaje_interno(mensaje, numero):
                 "1", "cuánto debo ahorrar para mi retiro",
                 "cuanto debo ahorrar para mi retiro",
             ]:
-                contexto["esperando"] = "jubilacion_meta"
+                contexto["esperando"] = "jubilacion_saldo_actual"
                 return (
-                    "🌅 Vamos a calcular cuánto necesitas ahorrar para tu retiro.\n\n"
-                    "1️⃣ ¿Cuánto dinero te gustaría tener ahorrado para cuando te retires? (por ejemplo: 1500000)"
+                    "🌅 Vamos a estimar tu ahorro para el retiro con la misma metodología que usa la "
+                    "calculadora oficial de ahorro voluntario de tu Afore.\n\n"
+                    "1️⃣ ¿Cuál es el saldo actual de tu cuenta individual? Es la suma de las subcuentas de "
+                    "Retiro, Cesantía en edad avanzada y Vejez (RCV), y Ahorro Voluntario (sin contar SAR-92 "
+                    "ni Vivienda). Lo puedes consultar en la app de tu Afore o en la app del SAR (CONSAR). Si "
+                    "no lo sabes o vas a empezar desde cero, escribe 0. (ejemplo: 45000)"
                 )
             if texto_limpio in [
                 "2", "qué es una afore y cómo saber en cuál estoy",
@@ -4247,100 +4265,95 @@ def _procesar_mensaje_interno(mensaje, numero):
             except Exception:
                 return "Por favor, indica un número de veces al año (ejemplo: 24)."
 
-        # --- Jubilación: flujo de meta de ahorro para el retiro ---
-        if contexto["esperando"] == "jubilacion_meta":
+        # --- Jubilación: ahorro voluntario (fórmula oficial de CONSAR/Afore) ---
+        if contexto["esperando"] == "jubilacion_saldo_actual":
             try:
-                contexto["jubilacion_meta"] = Decimal(mensaje.replace(",", ""))
-                if contexto["jubilacion_meta"] <= 0:
-                    return "La meta debe ser mayor a cero. ¿Cuánto dinero te gustaría tener ahorrado para tu retiro? (ejemplo: 1500000)"
-                contexto["esperando"] = "jubilacion_ahorro_actual"
-                return "2️⃣ ¿Ya tienes algo ahorrado hoy pensando en tu retiro? Si no tienes nada todavía, escribe 0. (por ejemplo: 50000)"
+                contexto["jubilacion_saldo_actual"] = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if contexto["jubilacion_saldo_actual"] < 0:
+                    return "Ese número no puede ser negativo 🙂 Si vas a empezar desde cero, escribe 0."
+                contexto["esperando"] = "jubilacion_edad_actual"
+                return "2️⃣ ¿Cuál es tu edad actual? (ejemplo: 30)"
             except:
-                return "Por favor, indica tu meta como un número (ejemplo: 1500000)."
+                return "Por favor, escribe solo un número (ejemplo: 45000, o 0 si vas a empezar desde cero)."
 
-        if contexto["esperando"] == "jubilacion_ahorro_actual":
+        if contexto["esperando"] == "jubilacion_edad_actual":
             try:
-                contexto["jubilacion_ahorro_actual"] = Decimal(mensaje.replace(",", ""))
-                if contexto["jubilacion_ahorro_actual"] < 0:
-                    return "Ese número no puede ser negativo 🙂 Si no tienes nada ahorrado todavía, escribe 0."
-                contexto["esperando"] = "jubilacion_tasa_anual"
-                return "3️⃣ ¿Qué tasa de rendimiento ANUAL esperas obtener sobre ese ahorro? (por ejemplo, si esperas un 8% anual, escribe 8)"
+                edad_actual = int(Decimal(mensaje.replace(",", "")))
+                if edad_actual < 15 or edad_actual > 80:
+                    return "Indica tu edad actual en años, entre 15 y 80 (ejemplo: 30)."
+                contexto["jubilacion_edad_actual"] = edad_actual
+                contexto["esperando"] = "jubilacion_edad_retiro"
+                return (
+                    "3️⃣ ¿A qué edad planeas retirarte?\n"
+                    "1️⃣ 60 años\n"
+                    "2️⃣ 65 años\n"
+                    "3️⃣ 67 años"
+                )
             except:
-                return "Por favor, escribe solo un número (ejemplo: 50000, o 0 si no tienes nada ahorrado todavía)."
+                return "Por favor, indica tu edad actual como un número (ejemplo: 30)."
 
-        if contexto["esperando"] == "jubilacion_tasa_anual":
+        if contexto["esperando"] == "jubilacion_edad_retiro":
+            mapa_edad_retiro = {"1": 60, "60": 60, "2": 65, "65": 65, "3": 67, "67": 67}
+            if texto_limpio not in mapa_edad_retiro:
+                return "Por favor, elige 1 (60 años), 2 (65 años) o 3 (67 años)."
+            edad_retiro = mapa_edad_retiro[texto_limpio]
+            if edad_retiro <= contexto["jubilacion_edad_actual"]:
+                return (
+                    f"Tu edad de retiro elegida ({edad_retiro} años) debe ser mayor a tu edad actual "
+                    f"({contexto['jubilacion_edad_actual']} años). Elige otra opción:\n"
+                    "1️⃣ 60 años\n"
+                    "2️⃣ 65 años\n"
+                    "3️⃣ 67 años"
+                )
+            contexto["jubilacion_edad_retiro"] = edad_retiro
+            contexto["esperando"] = "jubilacion_genero"
+            return (
+                "4️⃣ Para calcular la Unidad de Renta Vitalicia (esto lo pide la metodología oficial, ya que "
+                "la tabla usada distingue por esto), ¿cuál es tu sexo registrado ante tu Afore?\n"
+                "1️⃣ Hombre\n"
+                "2️⃣ Mujer"
+            )
+
+        if contexto["esperando"] == "jubilacion_genero":
+            if texto_limpio in ["1", "hombre"]:
+                contexto["jubilacion_genero"] = "hombre"
+            elif texto_limpio in ["2", "mujer"]:
+                contexto["jubilacion_genero"] = "mujer"
+            else:
+                return "Por favor, elige 1 (Hombre) o 2 (Mujer)."
+            contexto["esperando"] = "jubilacion_aportacion_mensual"
+            return "5️⃣ ¿Cuánto te gustaría aportar cada mes de forma voluntaria? (ejemplo: 500)"
+
+        if contexto["esperando"] == "jubilacion_aportacion_mensual":
+            try:
+                contexto["jubilacion_aportacion_mensual"] = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if contexto["jubilacion_aportacion_mensual"] < 0:
+                    return "Ese número no puede ser negativo 🙂 Si no vas a aportar nada por ahora, escribe 0."
+                contexto["esperando"] = "jubilacion_rendimiento_anual"
+                return (
+                    "6️⃣ ¿Qué rendimiento ANUAL esperas obtener en tu cuenta, antes de comisiones? Lo puedes "
+                    "ver en el estado de cuenta de tu Afore, o usar un estimado. (ejemplo: 6)"
+                )
+            except:
+                return "Por favor, indica ese monto como un número (ejemplo: 500, o 0 si no vas a aportar nada por ahora)."
+
+        if contexto["esperando"] == "jubilacion_rendimiento_anual":
             try:
                 tasa_anual = Decimal(mensaje.replace(",", "").replace("%", ""))
                 if tasa_anual < 0:
-                    return "La tasa esperada no puede ser negativa para este cálculo 🙂 Indica un número positivo (ejemplo: 8)."
-                contexto["jubilacion_tasa_anual"] = tasa_anual
-                contexto["esperando"] = "jubilacion_tiempo_numero"
-                return "4️⃣ ¿En cuánto tiempo te quieres retirar? Escribe solo el número (por ejemplo: 25)"
+                    return "El rendimiento esperado no puede ser negativo para este cálculo 🙂 Indica un número positivo (ejemplo: 6)."
+                resultado = calcular_ahorro_voluntario_afore(
+                    contexto["jubilacion_saldo_actual"],
+                    contexto["jubilacion_edad_actual"],
+                    contexto["jubilacion_edad_retiro"],
+                    contexto["jubilacion_genero"],
+                    contexto["jubilacion_aportacion_mensual"],
+                    tasa_anual,
+                )
+                return _con_feedback(numero, "jubilacion_voluntario", resultado)
             except:
-                return "Por favor, indica la tasa de rendimiento anual como un número (ejemplo: 8)."
+                return "Por favor, indica el rendimiento anual esperado como un número (ejemplo: 6)."
 
-        if contexto["esperando"] == "jubilacion_tiempo_numero":
-            try:
-                tiempo_numero = Decimal(mensaje.replace(",", ""))
-                if tiempo_numero <= 0:
-                    return "El tiempo debe ser mayor a cero. ¿En cuánto tiempo te quieres retirar? (ejemplo: 25)"
-                contexto["jubilacion_tiempo_numero"] = tiempo_numero
-                contexto["esperando"] = "jubilacion_tiempo_unidad"
-                return (
-                    "¿Ese número que diste fue en meses o en años?\n"
-                    "1️⃣ Meses\n"
-                    "2️⃣ Años"
-                )
-            except:
-                return "Por favor, indica el tiempo como un número (ejemplo: 25)."
-
-        if contexto["esperando"] == "jubilacion_tiempo_unidad":
-            if texto_limpio not in ["1", "2", "meses", "años", "anos", "año", "ano"]:
-                return "Por favor, elige 1 (Meses) o 2 (Años)."
-            if texto_limpio in ["1", "meses"]:
-                anios = contexto["jubilacion_tiempo_numero"] / Decimal("12")
-            else:
-                anios = contexto["jubilacion_tiempo_numero"]
-            contexto["jubilacion_anios"] = anios
-            contexto["esperando"] = "jubilacion_frecuencia"
-            return MENSAJE_FRECUENCIA_JUBILACION
-
-        if contexto["esperando"] == "jubilacion_frecuencia":
-            if texto_limpio == "5":
-                contexto["esperando"] = "jubilacion_frecuencia_otro"
-                return "¿Cuántas veces al año en total ahorrarías para tu retiro? (ejemplo: 24)"
-            if texto_limpio not in FRECUENCIAS_PAGO:
-                return "Por favor, elige una opción del 1 al 5."
-            try:
-                frecuencia_label, periodos_por_anio = FRECUENCIAS_PAGO[texto_limpio]
-                resultado = calcular_ahorro_jubilacion(
-                    contexto["jubilacion_meta"],
-                    contexto["jubilacion_ahorro_actual"],
-                    contexto["jubilacion_anios"],
-                    contexto["jubilacion_tasa_anual"],
-                    periodos_por_anio,
-                    frecuencia_label,
-                )
-                return _con_feedback(numero, "jubilacion_meta", resultado)
-            except Exception:
-                return "Hubo un error al calcular. Revisa tus datos e intenta de nuevo."
-
-        if contexto["esperando"] == "jubilacion_frecuencia_otro":
-            try:
-                periodos_por_anio = Decimal(mensaje.strip())
-                if periodos_por_anio <= 0:
-                    return "El número de veces al año debe ser mayor a cero (ejemplo: 24)."
-                resultado = calcular_ahorro_jubilacion(
-                    contexto["jubilacion_meta"],
-                    contexto["jubilacion_ahorro_actual"],
-                    contexto["jubilacion_anios"],
-                    contexto["jubilacion_tasa_anual"],
-                    periodos_por_anio,
-                    "personalizada",
-                )
-                return _con_feedback(numero, "jubilacion_meta", resultado)
-            except Exception:
-                return "Por favor, indica un número de veces al año (ejemplo: 24)."
 
         # FLUJO 2: abonos extra directos
         if contexto["esperando"] == "monto2":
