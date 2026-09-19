@@ -849,7 +849,7 @@ def calcular_crecimiento_inversion(monto_inicial, aportacion_periodica, anios, t
 # ahorro voluntario?" de CONSAR (la misma que usan las Afores para estimar
 # el saldo y la pensión a partir de aportaciones voluntarias):
 #
-#   Sf = Si(1+r^(m))^n(1-c^(m))^n + Av^(m) [ ((1+r^(m))^n(1-c^(m))^n - 1) / ((1+r^(m))(1+c^(m)) - 1) ]
+#   Sf = Si(1+r^(m))^n(1-c^(m))^n + Av^(m) [ ((1+r^(m))^n(1-c^(m))^n - 1) / ((1+r^(m))(1-c^(m)) - 1) ]
 #
 # donde r^(m) es el rendimiento mensual equivalente al rendimiento anual
 # esperado, y c^(m) es la comisión mensual de las SIEFORE adicionales. A
@@ -877,6 +877,7 @@ COMISION_ANUAL_SIEFORE_ADICIONALES = Decimal("0.57")  # %
 URV_VIGENTE = {
     60: {"hombre": Decimal("12.769161862147167"), "mujer": Decimal("14.03584217632955")},
     65: {"hombre": Decimal("11.689588383089918"), "mujer": Decimal("12.85693833274364")},
+    66: {"hombre": Decimal("11.46247101013117"), "mujer": Decimal("12.599302662761362")},
     67: {"hombre": Decimal("11.231904072367147"), "mujer": Decimal("12.334432614743635")},
 }
 
@@ -906,7 +907,10 @@ def calcular_ahorro_voluntario_afore(saldo_actual, edad_actual, edad_retiro, gen
         factor_combinado = (Decimal("1") + r_m) ** n * (Decimal("1") - c_m) ** n
         total_por_saldo_actual = saldo_actual * factor_combinado
 
-        denominador = (Decimal("1") + r_m) * (Decimal("1") + c_m) - Decimal("1")
+        # tr^(m) = (1+r^(m))(1-c^(m)) - 1: así lo define textualmente la
+        # metodología oficial de CONSAR (nota: es 1 MENOS c^(m), no más,
+        # en este denominador).
+        denominador = (Decimal("1") + r_m) * (Decimal("1") - c_m) - Decimal("1")
         if denominador == 0:
             total_por_aportaciones = aportacion_mensual * Decimal(n)
         else:
@@ -938,6 +942,268 @@ def calcular_ahorro_voluntario_afore(saldo_actual, edad_actual, edad_retiro, gen
             "el IMSS o el ISSSTE, tu pensión real se calcula con la normativa de esos institutos, no con este "
             "monto. Además, la comisión y la URV cambian con el tiempo, así que para un número exacto siempre "
             "confirma en la app o página de tu Afore.\n\n"
+            "Escribe *menú* para volver al inicio."
+        )
+    except Exception as e:
+        return f"❌ Error al calcular: {e}"
+
+
+# =========================================
+# Jubilación: calculadoras de IMSS e ISSSTE (versión simplificada)
+# =========================================
+# Jazmín pidió reestructurar la opción 1 de Jubilación en "Calculadoras de
+# jubilación", con un submenú que ofrece una calculadora distinta según
+# dónde cotiza la persona (IMSS, ISSSTE o independiente), tal como en la
+# página oficial de CONSAR (https://www.gob.mx/consar). Nos dio la
+# metodología oficial completa de las 3 (documentos "Metodología de la
+# Calculadora..." de CONSAR/Hacienda, 2026).
+#
+# La metodología COMPLETA de IMSS y de ISSSTE incluye, además del saldo y
+# la pensión, una Pensión Garantizada (piso mínimo legal), un Complemento
+# Solidario del Fondo de Pensiones para el Bienestar, y en el caso de IMSS
+# un calendario legal de aumento gradual a las aportaciones obligatorias
+# hasta 2030 (con una fórmula de anualidad de dos tramos bastante compleja)
+# y una tabla actuarial de "anualidad contingente" (distinta a la URV) para
+# la pensión, que no es de acceso público en un formato simple.
+#
+# Jazmín decidió explícitamente ir por una versión SIMPLIFICADA para IMSS
+# e ISSSTE (con la leyenda de que es una aproximación):
+#   - El SALDO acumulado sí sigue la fórmula oficial con sus aportaciones
+#     obligatorias (y, en el caso de IMSS, el ahorro voluntario adicional),
+#     pero usando la tasa de aportación VIGENTE EN 2026 de forma constante
+#     durante todo el periodo (sin el calendario gradual hasta 2030). Esto
+#     probablemente SUBESTIMA un poco el saldo real, ya que las tasas reales
+#     subirán con el tiempo.
+#   - La comisión c^(m) que usa la metodología oficial de IMSS/ISSSTE es la
+#     comisión general de la Afore (no específicamente la de las SIEFORE
+#     adicionales); como no tenemos ese dato por separado, reutilizamos
+#     COMISION_ANUAL_SIEFORE_ADICIONALES para toda la cuenta.
+#   - La PENSIÓN mensual se estima con la misma URV que ya usamos (como en
+#     independientes), en lugar de la tabla de anualidad contingente.
+#   - No se incluye Pensión Garantizada ni Complemento Solidario del FPB:
+#     el monto mostrado es la estimación "de mercado", sin esas salvaguardas
+#     legales mínimas.
+#   - Para IMSS, el rango salarial (de qué tanto se aporta según el sueldo)
+#     lo elige directamente la persona de una lista con los 8 rangos
+#     oficiales, en lugar de que el bot lo calcule a partir del sueldo: en
+#     2026 el salario mínimo diario ($315.04) ya es más alto que 1.5 UMA
+#     ($175.97), así que los rangos "en salarios mínimos/UMA" tal como
+#     están definidos en la ley ya no se pueden traducir a pesos de forma
+#     confiable sin más información oficial.
+#
+# Tabla de aportación obligatoria total (retiro + cesantía y vejez del
+# patrón, del trabajador, y de retiro) vigente en 2026 por rango salarial
+# (tomada tal cual de la metodología oficial de CONSAR para IMSS).
+IMSS_APORTACION_2026 = {
+    1: Decimal("6.275"),
+    2: Decimal("6.801"),
+    3: Decimal("7.976"),
+    4: Decimal("8.681"),
+    5: Decimal("9.151"),
+    6: Decimal("9.486"),
+    7: Decimal("9.738"),
+    8: Decimal("10.638"),
+}
+
+# Cuota social diaria (pesos) por rango salarial, vigente para el periodo
+# enero-abril de 2026 (se actualiza trimestralmente con el INPC, conforme
+# al Art. 168, fracción IV, de la Ley del Seguro Social). Para obtener el
+# valor mensual se multiplica por 30.4, tal como indica la metodología.
+IMSS_CUOTA_SOCIAL_DIARIA = {
+    1: Decimal("12.15794"),
+    2: Decimal("11.30970"),
+    3: Decimal("10.46148"),
+    4: Decimal("9.61325"),
+    5: Decimal("8.76502"),
+    6: Decimal("7.91682"),
+    7: Decimal("7.06856"),
+    8: Decimal("0.00000"),
+}
+
+IMSS_RANGOS_SALARIALES_TEXTO = {
+    1: "Hasta 1 salario mínimo",
+    2: "De 1.01 salarios mínimos a 1.5 UMA",
+    3: "De 1.51 a 2 UMA",
+    4: "De 2.01 a 2.5 UMA",
+    5: "De 2.51 a 3 UMA",
+    6: "De 3.01 a 3.5 UMA",
+    7: "De 3.51 a 4 UMA",
+    8: "Más de 4 UMA",
+}
+
+# Aportación obligatoria del trabajador al ISSSTE por concepto de Retiro,
+# Cesantía en edad avanzada y Vejez (no varía por nivel salarial).
+ISSSTE_APORTACION_OBLIGATORIA_PCT = Decimal("11.3")
+
+# Cuota social diaria (pesos) del ISSSTE: NO varía por nivel salarial (a
+# diferencia de la de IMSS). Es el 5.5% del salario mínimo general para el
+# Distrito Federal vigente al 1 de julio de 1997 (un valor histórico fijo,
+# distinto del salario mínimo actual), actualizada trimestralmente (marzo,
+# junio, septiembre y diciembre) conforme al INPC. Valor vigente para el
+# periodo de junio de 2026, confirmado por Jazmín el 19/sep/2026 con la
+# nota metodológica oficial de PENSIONISSSTE: https://www.pensionissste.gob.mx/Calculadora/resources/excel/Nota%20Metodologica_ISSSTE_sep2026.pdf
+# Si ha pasado mucho tiempo desde esa fecha, conviene revisar si ya se
+# actualizó (cambia cada trimestre).
+ISSSTE_CUOTA_SOCIAL_DIARIA = Decimal("6.7559")
+
+# Valor máximo del "peso" combinado (aportación del trabajador + la que
+# aporta el Gobierno Federal) para el ahorro solidario del ISSSTE, como %
+# del sueldo básico mensual.
+ISSSTE_AHORRO_SOLIDARIO_TOPE_GOBIERNO_PCT = Decimal("6.5")
+ISSSTE_AHORRO_SOLIDARIO_MULTIPLICADOR_GOBIERNO = Decimal("3.25")
+
+
+def _fv_anualidad(pago_mensual, tr_m, n):
+    """
+    Valor futuro de una anualidad ordinaria de n pagos mensuales iguales
+    (pago_mensual), con una tasa de crecimiento constante por periodo tr_m:
+    pago * [(1+tr_m)^n - 1] / tr_m (o pago*n si tr_m es 0). Es la misma
+    forma que usa la metodología oficial para acumular aportaciones
+    periódicas (obligatorias o voluntarias).
+    """
+    if tr_m == 0:
+        return pago_mensual * Decimal(n)
+    factor = (Decimal("1") + tr_m) ** n
+    return pago_mensual * (factor - Decimal("1")) / tr_m
+
+
+def calcular_jubilacion_imss(
+    saldo_actual, edad_actual, edad_retiro, genero, salario_mensual, rango_salarial,
+    rendimiento_anual_pct, aportacion_voluntaria_mensual,
+):
+    """
+    Versión simplificada (ver nota arriba) de la metodología oficial de
+    CONSAR para trabajadores que cotizan al IMSS bajo el régimen de Ley 97.
+    """
+    try:
+        saldo_actual = Decimal(str(saldo_actual))
+        salario_mensual = Decimal(str(salario_mensual))
+        aportacion_voluntaria_mensual = Decimal(str(aportacion_voluntaria_mensual))
+        rendimiento_anual_pct = Decimal(str(rendimiento_anual_pct))
+
+        n = (edad_retiro - edad_actual) * 12
+        if n <= 0:
+            return (
+                "Tu edad de retiro debe ser mayor a tu edad actual. Escribe *menú* para intentarlo de nuevo "
+                "con otros datos."
+            )
+
+        r_anual = rendimiento_anual_pct / Decimal("100")
+        r_m = (Decimal("1") + r_anual) ** (Decimal("1") / Decimal("12")) - Decimal("1")
+        c_m = (COMISION_ANUAL_SIEFORE_ADICIONALES / Decimal("100")) / Decimal("12")
+        tr_m = (Decimal("1") + r_m) * (Decimal("1") - c_m) - Decimal("1")
+
+        factor_saldo_actual = (Decimal("1") + tr_m) ** n
+        total_por_saldo_actual = saldo_actual * factor_saldo_actual
+
+        d = Decimal("0.80")  # densidad de cotización supuesta (80%)
+        aportacion_obligatoria_pct = IMSS_APORTACION_2026[rango_salarial]
+        cuota_social_mensual = IMSS_CUOTA_SOCIAL_DIARIA[rango_salarial] * Decimal("30.4")
+        aportacion_obligatoria_mensual = (
+            (aportacion_obligatoria_pct / Decimal("100")) * salario_mensual + cuota_social_mensual
+        )
+
+        total_obligatorio = _fv_anualidad(aportacion_obligatoria_mensual, tr_m, n)
+        total_voluntario = _fv_anualidad(aportacion_voluntaria_mensual, tr_m, n)
+        total_aportaciones = d * (total_obligatorio + total_voluntario)
+
+        saldo_final = (total_por_saldo_actual + total_aportaciones).quantize(Decimal("0.01"))
+
+        urv = URV_VIGENTE[edad_retiro][genero]
+        pension_mensual = (saldo_final / (Decimal("12") * urv)).quantize(Decimal("0.01"))
+
+        return (
+            "📌 Resultado de tu calculadora IMSS (Régimen de Ley 97):\n"
+            f"🏦 Saldo actual de tu cuenta individual: ${saldo_actual:,.2f}\n"
+            f"📆 Edad actual: {edad_actual} años · Edad de retiro: {edad_retiro} años ({n} meses)\n"
+            f"💼 Salario mensual base de cotización: ${salario_mensual:,.2f} · Rango: "
+            f"{IMSS_RANGOS_SALARIALES_TEXTO[rango_salarial]} ({aportacion_obligatoria_pct}%)\n"
+            f"➕ Aportación voluntaria mensual: ${aportacion_voluntaria_mensual:,.2f}\n"
+            f"📈 Rendimiento anual esperado: {rendimiento_anual_pct}%\n\n"
+            f"✅ Saldo estimado al retiro: ${saldo_final:,.2f}\n"
+            f"💰 Pensión mensual estimada (primer año de un Retiro Programado): ${pension_mensual:,.2f}\n\n"
+            "🔍 *Nota:* Este es un cálculo APROXIMADO, no el resultado exacto de la calculadora oficial de "
+            "CONSAR/IMSS. Usa la tasa de aportación obligatoria vigente en 2026 constante durante todo el "
+            "periodo (no el aumento gradual que marca la ley hasta 2030), y estima la pensión con la misma "
+            "Unidad de Renta Vitalicia que usamos en las otras calculadoras, en lugar de la tabla actuarial "
+            "que usa la calculadora oficial para este cálculo. Tampoco incluye la Pensión Garantizada (un "
+            "piso mínimo legal) ni el Complemento Solidario del Fondo de Pensiones para el Bienestar, que "
+            "podrían subir tu pensión real por encima de este monto si tu caso califica. Para un número "
+            "exacto, usa la calculadora oficial en https://www.gob.mx/consar.\n\n"
+            "Escribe *menú* para volver al inicio."
+        )
+    except Exception as e:
+        return f"❌ Error al calcular: {e}"
+
+
+def calcular_jubilacion_issste(
+    saldo_actual, edad_actual, edad_retiro, genero, sueldo_basico_mensual,
+    ahorro_solidario_pct, bono_pension, rendimiento_anual_pct,
+):
+    """
+    Versión simplificada (ver nota arriba) de la metodología oficial de
+    CONSAR para trabajadores que cotizan al ISSSTE bajo el régimen de
+    cuentas individuales.
+    """
+    try:
+        saldo_actual = Decimal(str(saldo_actual))
+        sueldo_basico_mensual = Decimal(str(sueldo_basico_mensual))
+        bono_pension = Decimal(str(bono_pension))
+        rendimiento_anual_pct = Decimal(str(rendimiento_anual_pct))
+        ahorro_solidario_pct = Decimal(str(ahorro_solidario_pct))
+
+        n = (edad_retiro - edad_actual) * 12
+        if n <= 0:
+            return (
+                "Tu edad de retiro debe ser mayor a tu edad actual. Escribe *menú* para intentarlo de nuevo "
+                "con otros datos."
+            )
+
+        r_anual = rendimiento_anual_pct / Decimal("100")
+        r_m = (Decimal("1") + r_anual) ** (Decimal("1") / Decimal("12")) - Decimal("1")
+        c_m = (COMISION_ANUAL_SIEFORE_ADICIONALES / Decimal("100")) / Decimal("12")
+        tr_m = (Decimal("1") + r_m) * (Decimal("1") - c_m) - Decimal("1")
+
+        factor_saldo_actual = (Decimal("1") + tr_m) ** n
+        total_por_saldo_actual = saldo_actual * factor_saldo_actual
+
+        d = Decimal("0.80")  # densidad de cotización supuesta (80%)
+        ao = (ISSSTE_APORTACION_OBLIGATORIA_PCT / Decimal("100")) * sueldo_basico_mensual
+
+        aporte_trabajador_solidario = (ahorro_solidario_pct / Decimal("100")) * sueldo_basico_mensual
+        aporte_gobierno_solidario = min(
+            ISSSTE_AHORRO_SOLIDARIO_MULTIPLICADOR_GOBIERNO * aporte_trabajador_solidario,
+            (ISSSTE_AHORRO_SOLIDARIO_TOPE_GOBIERNO_PCT / Decimal("100")) * sueldo_basico_mensual,
+        )
+        as_ = aporte_trabajador_solidario + aporte_gobierno_solidario
+
+        cs = ISSSTE_CUOTA_SOCIAL_DIARIA * Decimal("30.4")
+
+        total_obligatorio_y_solidario = d * _fv_anualidad(ao + as_ + cs, tr_m, n)
+        total_bono = bono_pension * ((Decimal("1") + tr_m) ** n)
+
+        saldo_final = (total_por_saldo_actual + total_obligatorio_y_solidario + total_bono).quantize(Decimal("0.01"))
+
+        urv = URV_VIGENTE[edad_retiro][genero]
+        pension_mensual = (saldo_final / (Decimal("12") * urv)).quantize(Decimal("0.01"))
+
+        return (
+            "📌 Resultado de tu calculadora ISSSTE (Régimen de cuentas individuales):\n"
+            f"🏦 Saldo actual de tu cuenta individual: ${saldo_actual:,.2f}\n"
+            f"📆 Edad actual: {edad_actual} años · Edad de retiro: {edad_retiro} años ({n} meses)\n"
+            f"💼 Sueldo básico mensual: ${sueldo_basico_mensual:,.2f}\n"
+            f"➕ Ahorro solidario: {ahorro_solidario_pct}% de tu sueldo (más lo que aporta el Gobierno Federal)\n"
+            f"🎁 Bono de Pensión ISSSTE: ${bono_pension:,.2f}\n"
+            f"📈 Rendimiento anual esperado: {rendimiento_anual_pct}%\n\n"
+            f"✅ Saldo estimado al retiro: ${saldo_final:,.2f}\n"
+            f"💰 Pensión mensual estimada (primer año de un Retiro Programado): ${pension_mensual:,.2f}\n\n"
+            "🔍 *Nota:* Este es un cálculo APROXIMADO, no el resultado exacto de la calculadora oficial de "
+            "CONSAR/ISSSTE. La pensión se estima con la misma Unidad de Renta Vitalicia que usamos en las "
+            "otras calculadoras, en lugar de la tabla actuarial que usa la calculadora oficial para este "
+            "cálculo. Tampoco incluye la Pensión Garantizada (un piso mínimo legal) ni el Complemento "
+            "Solidario del Fondo de Pensiones para el Bienestar, que podrían subir tu pensión real por "
+            "encima de este monto si tu caso califica. Para un número exacto, usa la calculadora oficial en "
+            "https://www.gob.mx/consar.\n\n"
             "Escribe *menú* para volver al inicio."
         )
     except Exception as e:
@@ -1627,7 +1893,7 @@ mensaje_submenu_inversion = (
 
 mensaje_submenu_jubilacion = (
     "🌅 *Jubilación*\n\n"
-    "1️⃣ ¿Cuánto debo ahorrar para mi retiro?\n"
+    "1️⃣ Calculadoras de jubilación\n"
     "2️⃣ ¿Qué es una Afore y cómo saber en cuál estoy?\n"
     "3️⃣ ¿Cómo se calcula mi pensión? Ley 73 vs. Ley 97\n"
     "4️⃣ Aportaciones voluntarias: cómo aumentar tu ahorro para el retiro\n"
@@ -1635,6 +1901,35 @@ mensaje_submenu_jubilacion = (
     "6️⃣ No he trabajado de forma formal, ¿aún así puedo ahorrar para mi retiro?\n\n"
     "Escribe el número, o *menú* para regresar."
 )
+
+mensaje_calculadoras_jubilacion = (
+    "🧮 *Calculadoras de jubilación*\n\n"
+    "Estas calculadoras estiman, a partir de ciertos supuestos, cuál podría ser tu saldo y tu pensión al "
+    "llegar al retiro, con la misma metodología (o una versión simplificada de ella) que las calculadoras "
+    "oficiales de CONSAR. Elige la que te corresponde:\n\n"
+    "1️⃣ Trabajadores que cotizan al IMSS (Régimen de Ley 97)\n"
+    "2️⃣ Trabajadores que cotizan al ISSSTE (Régimen de cuentas individuales)\n"
+    "3️⃣ Trabajadores independientes\n"
+    "4️⃣ Tutorial para el uso de las calculadoras\n\n"
+    "Escribe el número, o *menú* para regresar."
+)
+
+mensaje_jubilacion_tutorial = (
+    "📖 *Tutorial para el uso de las calculadoras*\n\n"
+    "Estas calculadoras te piden datos personales (tu saldo actual, tu edad, tu sueldo, etc.) para hacer "
+    "una estimación, no para guardarlos: no compartas aquí contraseñas, NIP ni códigos de verificación.\n"
+    "________________________________________\n"
+    "📌 Tu *saldo actual en tu cuenta individual* lo puedes consultar gratis en la app de tu Afore, en "
+    "Aforeweb, o en la app del SAR (CONSAR).\n"
+    "📌 Si cotizas al IMSS, tu *salario base de cotización* y tu rango salarial aparecen en tu recibo de "
+    "nómina o en tu constancia de semanas cotizadas del IMSS; si no los tienes a la mano, puedes usar tu "
+    "sueldo mensual aproximado y elegir el rango que más se le parezca.\n"
+    "📌 Si cotizas al ISSSTE, tu *sueldo básico mensual* y tu *Bono de Pensión ISSSTE* (si tienes uno) "
+    "también aparecen en tu recibo de nómina o en tu estado de cuenta de PENSIONISSSTE.\n"
+    "📌 Los resultados son estimaciones para fines ilustrativos, no un cálculo oficial ni vinculante: para "
+    "un número exacto, usa siempre la calculadora oficial de CONSAR en https://www.gob.mx/consar.\n"
+    "________________________________________\n"
+) + "\n" + mensaje_calculadoras_jubilacion
 
 # =========================================
 # Herramientas para el emprendedor
@@ -2443,8 +2738,15 @@ def _procesar_mensaje_interno(mensaje, numero):
             "inversion_monto_inicial", "inversion_aportacion", "inversion_tasa_anual",
             "inversion_tiempo_numero", "inversion_tiempo_unidad",
             "inversion_frecuencia", "inversion_frecuencia_otro",
+            "menu_jubilacion_calculadoras",
             "jubilacion_saldo_actual", "jubilacion_edad_actual", "jubilacion_edad_retiro",
             "jubilacion_genero", "jubilacion_aportacion_mensual", "jubilacion_rendimiento_anual",
+            "imss_saldo_actual", "imss_edad_actual", "imss_edad_retiro", "imss_genero",
+            "imss_salario_mensual", "imss_rango_salarial", "imss_rendimiento_anual",
+            "imss_aportacion_voluntaria_mensual",
+            "issste_saldo_actual", "issste_edad_actual", "issste_edad_retiro", "issste_genero",
+            "issste_sueldo_basico_mensual", "issste_ahorro_solidario", "issste_bono_pension",
+            "issste_rendimiento_anual",
             "menu_salud", "salud_pregunta", "menu_genero",
             "menu_emprendedor", "emprendedor_unidades", "emprendedor_costo_unitario",
             "emprendedor_costos_fijos", "emprendedor_utilidad_deseada", "emprendedor_precio_prueba",
@@ -2785,19 +3087,9 @@ def _procesar_mensaje_interno(mensaje, numero):
             if texto_limpio in ["menu", "menú"]:
                 estado_usuario[numero] = {}
                 return saludo_inicial
-            if texto_limpio in [
-                "1", "cuánto debo ahorrar para mi retiro",
-                "cuanto debo ahorrar para mi retiro",
-            ]:
-                contexto["esperando"] = "jubilacion_saldo_actual"
-                return (
-                    "🌅 Vamos a estimar tu ahorro para el retiro con la misma metodología que usa la "
-                    "calculadora oficial de ahorro voluntario de tu Afore.\n\n"
-                    "1️⃣ ¿Cuál es el saldo actual de tu cuenta individual? Es la suma de las subcuentas de "
-                    "Retiro, Cesantía en edad avanzada y Vejez (RCV), y Ahorro Voluntario (sin contar SAR-92 "
-                    "ni Vivienda). Lo puedes consultar en la app de tu Afore o en la app del SAR (CONSAR). Si "
-                    "no lo sabes o vas a empezar desde cero, escribe 0. (ejemplo: 45000)"
-                )
+            if texto_limpio in ["1", "calculadoras de jubilación", "calculadoras de jubilacion"]:
+                contexto["esperando"] = "menu_jubilacion_calculadoras"
+                return mensaje_calculadoras_jubilacion
             if texto_limpio in [
                 "2", "qué es una afore y cómo saber en cuál estoy",
                 "que es una afore y como saber en cual estoy",
@@ -2827,6 +3119,46 @@ def _procesar_mensaje_interno(mensaje, numero):
             ]:
                 return mensaje_jubilacion_independiente
             return "Por favor, elige una opción válida del menú de Jubilación, o escribe *menú* para regresar al inicio."
+
+        # --- Submenú: Calculadoras de jubilación ---
+        if contexto["esperando"] == "menu_jubilacion_calculadoras":
+            if texto_limpio in ["menu", "menú"]:
+                estado_usuario[numero] = {}
+                return saludo_inicial
+            if texto_limpio in ["1", "imss", "trabajadores que cotizan al imss"]:
+                contexto["esperando"] = "imss_saldo_actual"
+                return (
+                    "🌅 Vamos a estimar tu saldo y tu pensión con una versión simplificada de la metodología "
+                    "oficial de CONSAR para trabajadores que cotizan al IMSS (Régimen de Ley 97).\n\n"
+                    "1️⃣ ¿Cuál es el saldo actual de tu cuenta individual? Es la suma de las subcuentas de "
+                    "Retiro, Cesantía en edad avanzada y Vejez (RCV), y Ahorro Voluntario (sin contar SAR-92 "
+                    "ni Vivienda). Lo puedes consultar en la app de tu Afore o en la app del SAR (CONSAR). Si "
+                    "no lo sabes o vas a empezar desde cero, escribe 0. (ejemplo: 45000)"
+                )
+            if texto_limpio in ["2", "issste", "isste", "trabajadores que cotizan al issste"]:
+                contexto["esperando"] = "issste_saldo_actual"
+                return (
+                    "🌅 Vamos a estimar tu saldo y tu pensión con una versión simplificada de la metodología "
+                    "oficial de CONSAR para trabajadores que cotizan al ISSSTE (Régimen de cuentas "
+                    "individuales).\n\n"
+                    "1️⃣ ¿Cuál es el saldo actual de tu cuenta individual? Es la suma de las subcuentas de "
+                    "Retiro, Cesantía en edad avanzada y Vejez (RCV), y Ahorro Voluntario (sin contar SAR-92 "
+                    "ni Vivienda). Lo puedes consultar en la app de tu Afore o en la app del SAR (CONSAR). Si "
+                    "no lo sabes o vas a empezar desde cero, escribe 0. (ejemplo: 45000)"
+                )
+            if texto_limpio in ["3", "independientes", "trabajadores independientes"]:
+                contexto["esperando"] = "jubilacion_saldo_actual"
+                return (
+                    "🌅 Vamos a estimar tu ahorro para el retiro con la metodología oficial de CONSAR para "
+                    "trabajadores independientes.\n\n"
+                    "1️⃣ ¿Cuál es el saldo actual de tu cuenta individual? Es la suma de las subcuentas de "
+                    "Retiro, Cesantía en edad avanzada y Vejez (RCV), y Ahorro Voluntario (sin contar SAR-92 "
+                    "ni Vivienda). Lo puedes consultar en la app de tu Afore o en la app del SAR (CONSAR). Si "
+                    "no lo sabes o vas a empezar desde cero, escribe 0. (ejemplo: 45000)"
+                )
+            if texto_limpio in ["4", "tutorial", "tutorial para el uso de las calculadoras"]:
+                return mensaje_jubilacion_tutorial
+            return "Por favor, elige una opción válida (1 a 4), o escribe *menú* para regresar al inicio."
 
         # --- Submenú: Evalúa tu salud financiera ---
         if contexto["esperando"] == "menu_salud":
@@ -4353,6 +4685,256 @@ def _procesar_mensaje_interno(mensaje, numero):
                 return _con_feedback(numero, "jubilacion_voluntario", resultado)
             except:
                 return "Por favor, indica el rendimiento anual esperado como un número (ejemplo: 6)."
+
+        # --- Jubilación: calculadora IMSS (Régimen de Ley 97, versión simplificada) ---
+        if contexto["esperando"] == "imss_saldo_actual":
+            try:
+                contexto["imss_saldo_actual"] = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if contexto["imss_saldo_actual"] < 0:
+                    return "Ese número no puede ser negativo 🙂 Si vas a empezar desde cero, escribe 0."
+                contexto["esperando"] = "imss_edad_actual"
+                return "2️⃣ ¿Cuál es tu edad actual? (ejemplo: 30)"
+            except:
+                return "Por favor, escribe solo un número (ejemplo: 45000, o 0 si vas a empezar desde cero)."
+
+        if contexto["esperando"] == "imss_edad_actual":
+            try:
+                edad_actual = int(Decimal(mensaje.replace(",", "")))
+                if edad_actual < 15 or edad_actual > 80:
+                    return "Indica tu edad actual en años, entre 15 y 80 (ejemplo: 30)."
+                contexto["imss_edad_actual"] = edad_actual
+                contexto["esperando"] = "imss_edad_retiro"
+                return (
+                    "3️⃣ ¿A qué edad planeas retirarte?\n"
+                    "1️⃣ 60 años\n"
+                    "2️⃣ 65 años\n"
+                    "3️⃣ 67 años"
+                )
+            except:
+                return "Por favor, indica tu edad actual como un número (ejemplo: 30)."
+
+        if contexto["esperando"] == "imss_edad_retiro":
+            mapa_edad_retiro = {"1": 60, "60": 60, "2": 65, "65": 65, "3": 67, "67": 67}
+            if texto_limpio not in mapa_edad_retiro:
+                return "Por favor, elige 1 (60 años), 2 (65 años) o 3 (67 años)."
+            edad_retiro = mapa_edad_retiro[texto_limpio]
+            if edad_retiro <= contexto["imss_edad_actual"]:
+                return (
+                    f"Tu edad de retiro elegida ({edad_retiro} años) debe ser mayor a tu edad actual "
+                    f"({contexto['imss_edad_actual']} años). Elige otra opción:\n"
+                    "1️⃣ 60 años\n"
+                    "2️⃣ 65 años\n"
+                    "3️⃣ 67 años"
+                )
+            contexto["imss_edad_retiro"] = edad_retiro
+            contexto["esperando"] = "imss_genero"
+            return (
+                "4️⃣ Para calcular la Unidad de Renta Vitalicia (esto lo pide la metodología oficial, ya que "
+                "la tabla usada distingue por esto), ¿cuál es tu sexo registrado ante tu Afore?\n"
+                "1️⃣ Hombre\n"
+                "2️⃣ Mujer"
+            )
+
+        if contexto["esperando"] == "imss_genero":
+            if texto_limpio in ["1", "hombre"]:
+                contexto["imss_genero"] = "hombre"
+            elif texto_limpio in ["2", "mujer"]:
+                contexto["imss_genero"] = "mujer"
+            else:
+                return "Por favor, elige 1 (Hombre) o 2 (Mujer)."
+            contexto["esperando"] = "imss_salario_mensual"
+            return (
+                "5️⃣ ¿Cuál es tu salario mensual base de cotización? Es el sueldo con el que cotizas ante el "
+                "IMSS (lo puedes ver en tu recibo de nómina). (ejemplo: 12000)"
+            )
+
+        if contexto["esperando"] == "imss_salario_mensual":
+            try:
+                contexto["imss_salario_mensual"] = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if contexto["imss_salario_mensual"] <= 0:
+                    return "Por favor, indica un salario mensual mayor a 0 (ejemplo: 12000)."
+                contexto["esperando"] = "imss_rango_salarial"
+                opciones_rango = "\n".join(
+                    f"{k}️⃣ {IMSS_RANGOS_SALARIALES_TEXTO[k]}" for k in range(1, 9)
+                )
+                return (
+                    "6️⃣ ¿En cuál de estos rangos salariales caes? Este dato determina el % que se aporta a "
+                    "tu cuenta por concepto de Retiro, Cesantía en edad avanzada y Vejez. Puedes verlo en tu "
+                    "recibo de nómina o preguntar en Recursos Humanos; si no puedes confirmarlo, elige el que "
+                    "más se acerque a tu sueldo:\n"
+                    f"{opciones_rango}"
+                )
+            except:
+                return "Por favor, indica un número (ejemplo: 12000)."
+
+        if contexto["esperando"] == "imss_rango_salarial":
+            if texto_limpio not in [str(k) for k in range(1, 9)]:
+                return "Por favor, elige un número del 1 al 8 para tu rango salarial."
+            contexto["imss_rango_salarial"] = int(texto_limpio)
+            contexto["esperando"] = "imss_rendimiento_anual"
+            return (
+                "7️⃣ ¿Qué rendimiento ANUAL real esperas obtener, antes de comisiones? La metodología oficial "
+                "solo permite elegir entre estas dos opciones:\n"
+                "1️⃣ 4%\n"
+                "2️⃣ 5%"
+            )
+
+        if contexto["esperando"] == "imss_rendimiento_anual":
+            mapa_rendimiento = {"1": Decimal("4"), "4": Decimal("4"), "2": Decimal("5"), "5": Decimal("5")}
+            if texto_limpio not in mapa_rendimiento:
+                return "Por favor, elige 1 (4%) o 2 (5%)."
+            contexto["imss_rendimiento_anual"] = mapa_rendimiento[texto_limpio]
+            contexto["esperando"] = "imss_aportacion_voluntaria_mensual"
+            return (
+                "8️⃣ Además de tus aportaciones obligatorias, ¿te gustaría aportar algo cada mes de forma "
+                "voluntaria? Si no, escribe 0. (ejemplo: 500)"
+            )
+
+        if contexto["esperando"] == "imss_aportacion_voluntaria_mensual":
+            try:
+                aportacion_voluntaria = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if aportacion_voluntaria < 0:
+                    return "Ese número no puede ser negativo 🙂 Si no vas a aportar nada extra, escribe 0."
+                resultado = calcular_jubilacion_imss(
+                    contexto["imss_saldo_actual"],
+                    contexto["imss_edad_actual"],
+                    contexto["imss_edad_retiro"],
+                    contexto["imss_genero"],
+                    contexto["imss_salario_mensual"],
+                    contexto["imss_rango_salarial"],
+                    contexto["imss_rendimiento_anual"],
+                    aportacion_voluntaria,
+                )
+                return _con_feedback(numero, "jubilacion_imss", resultado)
+            except:
+                return "Por favor, indica ese monto como un número (ejemplo: 500, o 0 si no vas a aportar nada extra)."
+
+        # --- Jubilación: calculadora ISSSTE (Régimen de cuentas individuales, versión simplificada) ---
+        if contexto["esperando"] == "issste_saldo_actual":
+            try:
+                contexto["issste_saldo_actual"] = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if contexto["issste_saldo_actual"] < 0:
+                    return "Ese número no puede ser negativo 🙂 Si vas a empezar desde cero, escribe 0."
+                contexto["esperando"] = "issste_edad_actual"
+                return "2️⃣ ¿Cuál es tu edad actual? (ejemplo: 30)"
+            except:
+                return "Por favor, escribe solo un número (ejemplo: 45000, o 0 si vas a empezar desde cero)."
+
+        if contexto["esperando"] == "issste_edad_actual":
+            try:
+                edad_actual = int(Decimal(mensaje.replace(",", "")))
+                if edad_actual < 15 or edad_actual > 80:
+                    return "Indica tu edad actual en años, entre 15 y 80 (ejemplo: 30)."
+                contexto["issste_edad_actual"] = edad_actual
+                contexto["esperando"] = "issste_edad_retiro"
+                return (
+                    "3️⃣ ¿A qué edad planeas retirarte? La metodología del ISSSTE solo permite elegir entre "
+                    "estas opciones:\n"
+                    "1️⃣ 65 años\n"
+                    "2️⃣ 66 años\n"
+                    "3️⃣ 67 años"
+                )
+            except:
+                return "Por favor, indica tu edad actual como un número (ejemplo: 30)."
+
+        if contexto["esperando"] == "issste_edad_retiro":
+            mapa_edad_retiro = {"1": 65, "65": 65, "2": 66, "66": 66, "3": 67, "67": 67}
+            if texto_limpio not in mapa_edad_retiro:
+                return "Por favor, elige 1 (65 años), 2 (66 años) o 3 (67 años)."
+            edad_retiro = mapa_edad_retiro[texto_limpio]
+            if edad_retiro <= contexto["issste_edad_actual"]:
+                return (
+                    f"Tu edad de retiro elegida ({edad_retiro} años) debe ser mayor a tu edad actual "
+                    f"({contexto['issste_edad_actual']} años). Elige otra opción:\n"
+                    "1️⃣ 65 años\n"
+                    "2️⃣ 66 años\n"
+                    "3️⃣ 67 años"
+                )
+            contexto["issste_edad_retiro"] = edad_retiro
+            contexto["esperando"] = "issste_genero"
+            return (
+                "4️⃣ Para calcular la Unidad de Renta Vitalicia (esto lo pide la metodología oficial, ya que "
+                "la tabla usada distingue por esto), ¿cuál es tu sexo registrado ante tu Afore?\n"
+                "1️⃣ Hombre\n"
+                "2️⃣ Mujer"
+            )
+
+        if contexto["esperando"] == "issste_genero":
+            if texto_limpio in ["1", "hombre"]:
+                contexto["issste_genero"] = "hombre"
+            elif texto_limpio in ["2", "mujer"]:
+                contexto["issste_genero"] = "mujer"
+            else:
+                return "Por favor, elige 1 (Hombre) o 2 (Mujer)."
+            contexto["esperando"] = "issste_sueldo_basico_mensual"
+            return (
+                "5️⃣ ¿Cuál es tu sueldo básico mensual? Lo puedes ver en tu recibo de nómina o en tu estado "
+                "de cuenta de PENSIONISSSTE. (ejemplo: 15000)"
+            )
+
+        if contexto["esperando"] == "issste_sueldo_basico_mensual":
+            try:
+                contexto["issste_sueldo_basico_mensual"] = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if contexto["issste_sueldo_basico_mensual"] <= 0:
+                    return "Por favor, indica un sueldo mensual mayor a 0 (ejemplo: 15000)."
+                contexto["esperando"] = "issste_ahorro_solidario"
+                return (
+                    "6️⃣ ¿Quieres aportar a tu ahorro solidario? Por cada peso que tú aportes, el Gobierno "
+                    "Federal aporta 3.25 pesos más (hasta cierto tope), así que suele convenir aportar el "
+                    "máximo si puedes:\n"
+                    "1️⃣ No voy a aportar (0%)\n"
+                    "2️⃣ 1% de mi sueldo\n"
+                    "3️⃣ 2% de mi sueldo"
+                )
+            except:
+                return "Por favor, indica un número (ejemplo: 15000)."
+
+        if contexto["esperando"] == "issste_ahorro_solidario":
+            mapa_ahorro_solidario = {
+                "1": Decimal("0"), "0": Decimal("0"),
+                "2": Decimal("1"), "1%": Decimal("1"),
+                "3": Decimal("2"), "2%": Decimal("2"),
+            }
+            if texto_limpio not in mapa_ahorro_solidario:
+                return "Por favor, elige 1 (no voy a aportar), 2 (1%) o 3 (2%)."
+            contexto["issste_ahorro_solidario"] = mapa_ahorro_solidario[texto_limpio]
+            contexto["esperando"] = "issste_bono_pension"
+            return (
+                "7️⃣ ¿Tienes un Bono de Pensión ISSSTE? Es un monto que se te reconoce si ya cotizabas antes "
+                "de la reforma de 2007; aparece en tu estado de cuenta de PENSIONISSSTE. Si no tienes o no "
+                "sabes, escribe 0. (ejemplo: 50000)"
+            )
+
+        if contexto["esperando"] == "issste_bono_pension":
+            try:
+                contexto["issste_bono_pension"] = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if contexto["issste_bono_pension"] < 0:
+                    return "Ese número no puede ser negativo 🙂 Si no tienes Bono de Pensión ISSSTE, escribe 0."
+                contexto["esperando"] = "issste_rendimiento_anual"
+                return (
+                    "8️⃣ ¿Qué rendimiento ANUAL real esperas obtener, antes de comisiones? La metodología "
+                    "oficial solo permite elegir entre estas dos opciones:\n"
+                    "1️⃣ 4%\n"
+                    "2️⃣ 5%"
+                )
+            except:
+                return "Por favor, indica ese monto como un número (ejemplo: 50000, o 0 si no tienes)."
+
+        if contexto["esperando"] == "issste_rendimiento_anual":
+            mapa_rendimiento = {"1": Decimal("4"), "4": Decimal("4"), "2": Decimal("5"), "5": Decimal("5")}
+            if texto_limpio not in mapa_rendimiento:
+                return "Por favor, elige 1 (4%) o 2 (5%)."
+            resultado = calcular_jubilacion_issste(
+                contexto["issste_saldo_actual"],
+                contexto["issste_edad_actual"],
+                contexto["issste_edad_retiro"],
+                contexto["issste_genero"],
+                contexto["issste_sueldo_basico_mensual"],
+                contexto["issste_ahorro_solidario"],
+                contexto["issste_bono_pension"],
+                mapa_rendimiento[texto_limpio],
+            )
+            return _con_feedback(numero, "jubilacion_issste", resultado)
 
 
         # FLUJO 2: abonos extra directos
