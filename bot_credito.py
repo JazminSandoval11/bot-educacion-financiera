@@ -936,12 +936,8 @@ def calcular_ahorro_voluntario_afore(saldo_actual, edad_actual, edad_retiro, gen
             f"contar tu saldo actual) y ${rendimiento_generado:,.2f} vendría del rendimiento generado, ya "
             "descontando comisiones.\n\n"
             f"💰 Pensión mensual estimada (primer año de un Retiro Programado): ${pension_mensual:,.2f}\n\n"
-            "🔍 *Nota:* Este cálculo usa la misma metodología que la calculadora oficial de ahorro voluntario "
-            "de tu Afore, con la comisión vigente de las SIEFORE adicionales y la Unidad de Renta Vitalicia "
-            "(URV) más reciente que tenemos disponible. La pensión mensual es solo ilustrativa: si cotizas en "
-            "el IMSS o el ISSSTE, tu pensión real se calcula con la normativa de esos institutos, no con este "
-            "monto. Además, la comisión y la URV cambian con el tiempo, así que para un número exacto siempre "
-            "confirma en la app o página de tu Afore.\n\n"
+            "🔍 *Nota:* Este es un cálculo aproximado. Para un resultado 100% exacto, verifica en la "
+            "calculadora oficial de CONSAR: https://www.consar.gob.mx/gobmx/aplicativo/calculadora/Calculadoras/\n\n"
             "Escribe *menú* para volver al inicio."
         )
     except Exception as e:
@@ -984,12 +980,18 @@ def calcular_ahorro_voluntario_afore(saldo_actual, edad_actual, edad_retiro, gen
 #     el monto mostrado es la estimación "de mercado", sin esas salvaguardas
 #     legales mínimas.
 #   - Para IMSS, el rango salarial (de qué tanto se aporta según el sueldo)
-#     lo elige directamente la persona de una lista con los 8 rangos
-#     oficiales, en lugar de que el bot lo calcule a partir del sueldo: en
-#     2026 el salario mínimo diario ($315.04) ya es más alto que 1.5 UMA
-#     ($175.97), así que los rangos "en salarios mínimos/UMA" tal como
-#     están definidos en la ley ya no se pueden traducir a pesos de forma
-#     confiable sin más información oficial.
+#     se calcula automáticamente a partir del salario que la persona ya
+#     dio, sin preguntarle nada más. OJO: en 2026 el salario mínimo diario
+#     ($315.04) ya es más alto que 1.5 UMA ($175.97), así que el rango 2
+#     ("de 1.01 salarios mínimos a 1.5 UMA") nunca se puede asignar este
+#     año, y alguien que gane justo el salario mínimo puede terminar en un
+#     rango más alto (con una aportación mayor a la que le tocaría en
+#     estricto sentido legal) en vez del rango 1. Jazmín revisó este
+#     problema el 19/sep/2026 y decidió explícitamente automatizarlo sin
+#     pedirle confirmación a la persona (antes se le pedía elegir su
+#     rango de una lista, pero resultaba confuso para el público objetivo
+#     del bot), aceptando ese riesgo conocido a cambio de un flujo más
+#     simple. Ver _imss_rango_salarial_desde_salario() más abajo.
 #
 # Tabla de aportación obligatoria total (retiro + cesantía y vejez del
 # patrón, del trabajador, y de retiro) vigente en 2026 por rango salarial
@@ -1030,6 +1032,47 @@ IMSS_RANGOS_SALARIALES_TEXTO = {
     7: "De 3.51 a 4 UMA",
     8: "Más de 4 UMA",
 }
+
+# Salario mínimo general diario vigente en 2026 (usado únicamente para
+# ubicar el rango salarial 1 de la tabla de arriba). Cambia cada enero,
+# por decreto de la Comisión Nacional de los Salarios Mínimos: si ha
+# pasado mucho tiempo desde que se fijó este valor, conviene verificarlo
+# en https://www.gob.mx/conasami.
+SALARIO_MINIMO_DIARIO_2026 = Decimal("315.04")
+
+
+def _imss_rango_salarial_desde_salario(salario_mensual):
+    """
+    Calcula automáticamente el rango salarial (1 a 8) de la tabla de
+    aportación obligatoria del IMSS a partir del salario mensual de la
+    persona, aplicando los cortes oficiales en el orden en que la ley
+    los define: primero se compara contra el salario mínimo (rango 1) y
+    luego, si no aplica, contra los múltiplos de UMA de los rangos 2 a 8.
+
+    Jazmín decidió automatizar este paso (en vez de pedirle a la persona
+    que elija su rango de una lista, que resultaba confuso) sabiendo que
+    en 2026 el rango 2 nunca se asigna, porque el salario mínimo diario
+    ya es más alto que su límite superior en UMA (ver nota en la sección
+    de arriba). Esto puede asignarle a alguien con el salario mínimo (o
+    cercano) un rango más alto del que le correspondería en estricto
+    sentido legal.
+    """
+    salario_diario = Decimal(str(salario_mensual)) / Decimal("30.4")
+    if salario_diario <= SALARIO_MINIMO_DIARIO_2026:
+        return 1
+    limites_uma_por_rango = [
+        (2, Decimal("1.5")),
+        (3, Decimal("2.0")),
+        (4, Decimal("2.5")),
+        (5, Decimal("3.0")),
+        (6, Decimal("3.5")),
+        (7, Decimal("4.0")),
+    ]
+    for rango, multiplo_uma in limites_uma_por_rango:
+        if salario_diario <= multiplo_uma * UMA_DIARIA_VIGENTE:
+            return rango
+    return 8
+
 
 # Aportación obligatoria del trabajador al ISSSTE por concepto de Retiro,
 # Cesantía en edad avanzada y Vejez (no varía por nivel salarial).
@@ -1122,14 +1165,8 @@ def calcular_jubilacion_imss(
             f"📈 Rendimiento anual esperado: {rendimiento_anual_pct}%\n\n"
             f"✅ Saldo estimado al retiro: ${saldo_final:,.2f}\n"
             f"💰 Pensión mensual estimada (primer año de un Retiro Programado): ${pension_mensual:,.2f}\n\n"
-            "🔍 *Nota:* Este es un cálculo APROXIMADO, no el resultado exacto de la calculadora oficial de "
-            "CONSAR/IMSS. Usa la tasa de aportación obligatoria vigente en 2026 constante durante todo el "
-            "periodo (no el aumento gradual que marca la ley hasta 2030), y estima la pensión con la misma "
-            "Unidad de Renta Vitalicia que usamos en las otras calculadoras, en lugar de la tabla actuarial "
-            "que usa la calculadora oficial para este cálculo. Tampoco incluye la Pensión Garantizada (un "
-            "piso mínimo legal) ni el Complemento Solidario del Fondo de Pensiones para el Bienestar, que "
-            "podrían subir tu pensión real por encima de este monto si tu caso califica. Para un número "
-            "exacto, usa la calculadora oficial en https://www.gob.mx/consar.\n\n"
+            "🔍 *Nota:* Este es un cálculo aproximado. Para un resultado 100% exacto, verifica en la "
+            "calculadora oficial de CONSAR: https://www.consar.gob.mx/gobmx/aplicativo/calculadora/Calculadoras/\n\n"
             "Escribe *menú* para volver al inicio."
         )
     except Exception as e:
@@ -1197,13 +1234,132 @@ def calcular_jubilacion_issste(
             f"📈 Rendimiento anual esperado: {rendimiento_anual_pct}%\n\n"
             f"✅ Saldo estimado al retiro: ${saldo_final:,.2f}\n"
             f"💰 Pensión mensual estimada (primer año de un Retiro Programado): ${pension_mensual:,.2f}\n\n"
-            "🔍 *Nota:* Este es un cálculo APROXIMADO, no el resultado exacto de la calculadora oficial de "
-            "CONSAR/ISSSTE. La pensión se estima con la misma Unidad de Renta Vitalicia que usamos en las "
-            "otras calculadoras, en lugar de la tabla actuarial que usa la calculadora oficial para este "
-            "cálculo. Tampoco incluye la Pensión Garantizada (un piso mínimo legal) ni el Complemento "
-            "Solidario del Fondo de Pensiones para el Bienestar, que podrían subir tu pensión real por "
-            "encima de este monto si tu caso califica. Para un número exacto, usa la calculadora oficial en "
-            "https://www.gob.mx/consar.\n\n"
+            "🔍 *Nota:* Este es un cálculo aproximado. Para un resultado 100% exacto, verifica en la "
+            "calculadora oficial de CONSAR: https://www.consar.gob.mx/gobmx/aplicativo/calculadora/Calculadoras/\n\n"
+            "Escribe *menú* para volver al inicio."
+        )
+    except Exception as e:
+        return f"❌ Error al calcular: {e}"
+
+
+# =========================================
+# Jubilación: calculadora de pensión Ley 73 (IMSS, régimen anterior a 1997)
+# =========================================
+# A diferencia de Ley 97/ISSSTE/independientes (que acumulan un saldo en
+# una cuenta individual y de ahí se estima una pensión), la Ley 73 es un
+# esquema de beneficio definido: la pensión se calcula directamente con una
+# fórmula legal, sin cuenta ni rendimiento de por medio. Metodología tomada
+# de la nota "Metodología para clientes de la calculadora de Retiro" de
+# Profuturo (Afore), que Jazmín compartió el 19/sep/2026 (la CONSAR no
+# publica una propia para este régimen):
+# https://www.profuturo.mx/content/dam/privado-afore/calculadora/Anexo_Ley73.pdf
+#
+#   k = salario promedio / (UMA * 30.4)               [en múltiplos de UMA]
+#   CBA = salario promedio diario * %CBA * 365          [Cuantía Básica Anual]
+#   años posteriores = (semanas cotizadas - 500) / 52
+#   incremento anual = salario promedio diario * %incremento * 365 * años posteriores
+#   CAP = CBA + incremento anual                        [Cuantía Anual de la Pensión]
+#   pensión mensual = CAP * (1+15%) * (1+11%) * %pensión / 12
+#
+# %CBA y %incremento dependen del rango de k (tabla oficial); %pensión
+# depende de la edad de retiro (60 a 65 años). El +15% y el +11% ya vienen
+# incluidos tal cual en la fórmula de Profuturo (ayuda asistencial y el
+# "Factor Fox" de un decreto de 2001); no dependen de si tienes o no
+# dependientes económicos, así que no le preguntamos eso a la persona.
+#
+# La UMA diaria (usada para ubicar el rango de k) también viene de ese
+# mismo documento. Cambia cada febrero: si ha pasado mucho tiempo, conviene
+# verificarla en https://www.inegi.org.mx/temas/uma/.
+UMA_DIARIA_VIGENTE = Decimal("117.31")
+
+# (k_min, k_max, %CBA, %incremento anual), tal cual la tabla oficial de
+# Profuturo. OJO: la tabla oficial que tenemos solo llega hasta k=5.50; no
+# cubre salarios promedio más altos que eso (algo que ya de por sí es poco
+# común entre quienes califican para Ley 73 hoy en día).
+LEY73_TABLA_CBA_INCREMENTO = [
+    (Decimal("0"), Decimal("1.00"), Decimal("80.00"), Decimal("0.56")),
+    (Decimal("1.01"), Decimal("1.25"), Decimal("77.11"), Decimal("0.81")),
+    (Decimal("1.26"), Decimal("1.50"), Decimal("55.18"), Decimal("1.18")),
+    (Decimal("1.51"), Decimal("1.75"), Decimal("49.23"), Decimal("1.43")),
+    (Decimal("1.76"), Decimal("2.00"), Decimal("42.67"), Decimal("1.62")),
+    (Decimal("2.01"), Decimal("2.25"), Decimal("37.65"), Decimal("1.76")),
+    (Decimal("2.26"), Decimal("2.50"), Decimal("33.68"), Decimal("1.87")),
+    (Decimal("2.51"), Decimal("2.75"), Decimal("30.48"), Decimal("1.96")),
+    (Decimal("2.76"), Decimal("3.00"), Decimal("27.83"), Decimal("2.03")),
+    (Decimal("3.01"), Decimal("3.25"), Decimal("25.60"), Decimal("2.10")),
+    (Decimal("3.26"), Decimal("3.50"), Decimal("23.70"), Decimal("2.15")),
+    (Decimal("3.51"), Decimal("3.75"), Decimal("22.07"), Decimal("2.20")),
+    (Decimal("3.76"), Decimal("4.00"), Decimal("20.65"), Decimal("2.24")),
+    (Decimal("4.01"), Decimal("4.25"), Decimal("19.39"), Decimal("2.27")),
+    (Decimal("4.26"), Decimal("4.50"), Decimal("18.29"), Decimal("2.30")),
+    (Decimal("4.51"), Decimal("4.75"), Decimal("17.30"), Decimal("2.33")),
+    (Decimal("4.76"), Decimal("5.00"), Decimal("16.41"), Decimal("2.36")),
+    (Decimal("5.01"), Decimal("5.25"), Decimal("15.61"), Decimal("2.38")),
+    (Decimal("5.26"), Decimal("5.50"), Decimal("14.88"), Decimal("2.40")),
+]
+
+LEY73_PORCENTAJE_PENSION_POR_EDAD = {
+    60: Decimal("75"), 61: Decimal("80"), 62: Decimal("85"),
+    63: Decimal("90"), 64: Decimal("95"), 65: Decimal("100"),
+}
+
+
+def calcular_jubilacion_ley73(salario_promedio_mensual, semanas_cotizadas, edad_retiro):
+    try:
+        salario_promedio_mensual = Decimal(str(salario_promedio_mensual))
+        semanas_cotizadas = Decimal(str(semanas_cotizadas))
+
+        if semanas_cotizadas < 500:
+            return (
+                "Para este tipo de pensión se necesitan al menos 500 semanas cotizadas al IMSS, y tú "
+                f"indicaste {semanas_cotizadas}. Puedes consultar tus semanas cotizadas exactas en la app "
+                "del IMSS Digital. Escribe *menú* para intentarlo de nuevo con otro número."
+            )
+
+        salario_promedio_diario = salario_promedio_mensual / Decimal("30.4")
+        k = salario_promedio_diario / UMA_DIARIA_VIGENTE
+
+        bracket = None
+        for k_min, k_max, pct_cba, pct_incremento in LEY73_TABLA_CBA_INCREMENTO:
+            if k_min <= k <= k_max:
+                bracket = (k_min, k_max, pct_cba, pct_incremento)
+                break
+
+        if bracket is None:
+            return (
+                f"Tu salario promedio corresponde a un nivel muy alto ({k:.2f} veces la UMA) que no está "
+                "cubierto por esta calculadora simplificada de Ley 73 (la tabla oficial que tenemos llega "
+                "hasta 5.50 veces la UMA). Para un cálculo exacto en tu caso, te recomendamos usar la "
+                "calculadora oficial de tu Afore o consultar directamente con el IMSS. Escribe *menú* para "
+                "volver al inicio."
+            )
+
+        _, _, pct_cba, pct_incremento = bracket
+        cba_anual = salario_promedio_diario * (pct_cba / Decimal("100")) * Decimal("365")
+        anios_posteriores = (semanas_cotizadas - Decimal("500")) / Decimal("52")
+        incremento_anual = (
+            salario_promedio_diario * (pct_incremento / Decimal("100")) * Decimal("365") * anios_posteriores
+        )
+        cap_anual = cba_anual + incremento_anual
+
+        pct_pension = LEY73_PORCENTAJE_PENSION_POR_EDAD[edad_retiro]
+        pension_mensual = (
+            cap_anual * Decimal("1.15") * Decimal("1.11") * (pct_pension / Decimal("100")) / Decimal("12")
+        ).quantize(Decimal("0.01"))
+
+        tasa_reemplazo = (pension_mensual / salario_promedio_mensual * Decimal("100")).quantize(Decimal("0.1"))
+
+        return (
+            "📌 Resultado de tu calculadora de pensión Ley 73 (IMSS):\n"
+            f"💼 Salario mensual promedio de tus últimas 250 semanas: ${salario_promedio_mensual:,.2f}\n"
+            f"📆 Semanas cotizadas: {semanas_cotizadas} (años después del mínimo de 500: "
+            f"{anios_posteriores:.1f})\n"
+            f"🎂 Edad de retiro: {edad_retiro} años ({pct_pension}% de la pensión completa)\n\n"
+            f"💰 Pensión mensual estimada: ${pension_mensual:,.2f}\n"
+            f"📊 Tasa de reemplazo (respecto a tu salario): {tasa_reemplazo}%\n\n"
+            "🔍 *Nota:* Este es un cálculo aproximado, no el trámite oficial. Si tu resultado queda cerca "
+            "del salario mínimo, tu pensión real podría ser más alta gracias a la Pensión Mínima "
+            "Garantizada. Para un número exacto, haz tu trámite directamente con el IMSS.\n\n"
             "Escribe *menú* para volver al inicio."
         )
     except Exception as e:
@@ -1905,12 +2061,13 @@ mensaje_submenu_jubilacion = (
 mensaje_calculadoras_jubilacion = (
     "🧮 *Calculadoras de jubilación*\n\n"
     "Estas calculadoras estiman, a partir de ciertos supuestos, cuál podría ser tu saldo y tu pensión al "
-    "llegar al retiro, con la misma metodología (o una versión simplificada de ella) que las calculadoras "
-    "oficiales de CONSAR. Elige la que te corresponde:\n\n"
+    "llegar al retiro, con la misma metodología (o una versión simplificada de ella) que usan las "
+    "calculadoras oficiales de CONSAR y de las Afores. Elige la que te corresponde:\n\n"
     "1️⃣ Trabajadores que cotizan al IMSS (Régimen de Ley 97)\n"
-    "2️⃣ Trabajadores que cotizan al ISSSTE (Régimen de cuentas individuales)\n"
-    "3️⃣ Trabajadores independientes\n"
-    "4️⃣ Tutorial para el uso de las calculadoras\n\n"
+    "2️⃣ Trabajadores que cotizaban al IMSS antes de julio de 1997 (Régimen de Ley 73)\n"
+    "3️⃣ Trabajadores que cotizan al ISSSTE (Régimen de cuentas individuales)\n"
+    "4️⃣ Trabajadores independientes\n"
+    "5️⃣ Tutorial para el uso de las calculadoras\n\n"
     "Escribe el número, o *menú* para regresar."
 )
 
@@ -1921,13 +2078,18 @@ mensaje_jubilacion_tutorial = (
     "________________________________________\n"
     "📌 Tu *saldo actual en tu cuenta individual* lo puedes consultar gratis en la app de tu Afore, en "
     "Aforeweb, o en la app del SAR (CONSAR).\n"
-    "📌 Si cotizas al IMSS, tu *salario base de cotización* y tu rango salarial aparecen en tu recibo de "
-    "nómina o en tu constancia de semanas cotizadas del IMSS; si no los tienes a la mano, puedes usar tu "
-    "sueldo mensual aproximado y elegir el rango que más se le parezca.\n"
+    "📌 Si cotizas al IMSS bajo Ley 97, tu *salario base de cotización* aparece en tu recibo de nómina o en "
+    "tu constancia de semanas cotizadas del IMSS; si no lo tienes a la mano, puedes usar tu sueldo mensual "
+    "aproximado (el bot calcula tu rango salarial automáticamente a partir de este dato).\n"
+    "📌 Si estás en Ley 73 (cotizaste al IMSS antes de julio de 1997), necesitas tu *salario promedio de "
+    "las últimas 250 semanas* (casi 5 años) y tus *semanas cotizadas totales*; ambos los puedes consultar "
+    "en la app del IMSS Digital.\n"
     "📌 Si cotizas al ISSSTE, tu *sueldo básico mensual* y tu *Bono de Pensión ISSSTE* (si tienes uno) "
     "también aparecen en tu recibo de nómina o en tu estado de cuenta de PENSIONISSSTE.\n"
     "📌 Los resultados son estimaciones para fines ilustrativos, no un cálculo oficial ni vinculante: para "
-    "un número exacto, usa siempre la calculadora oficial de CONSAR en https://www.gob.mx/consar.\n"
+    "un número exacto, usa siempre la calculadora oficial de CONSAR "
+    "(https://www.consar.gob.mx/gobmx/aplicativo/calculadora/Calculadoras/) o el trámite directo con tu "
+    "institución.\n"
     "________________________________________\n"
 ) + "\n" + mensaje_calculadoras_jubilacion
 
@@ -2742,11 +2904,12 @@ def _procesar_mensaje_interno(mensaje, numero):
             "jubilacion_saldo_actual", "jubilacion_edad_actual", "jubilacion_edad_retiro",
             "jubilacion_genero", "jubilacion_aportacion_mensual", "jubilacion_rendimiento_anual",
             "imss_saldo_actual", "imss_edad_actual", "imss_edad_retiro", "imss_genero",
-            "imss_salario_mensual", "imss_rango_salarial", "imss_rendimiento_anual",
+            "imss_salario_mensual", "imss_rendimiento_anual",
             "imss_aportacion_voluntaria_mensual",
             "issste_saldo_actual", "issste_edad_actual", "issste_edad_retiro", "issste_genero",
             "issste_sueldo_basico_mensual", "issste_ahorro_solidario", "issste_bono_pension",
             "issste_rendimiento_anual",
+            "ley73_salario_promedio", "ley73_semanas_cotizadas", "ley73_edad_retiro",
             "menu_salud", "salud_pregunta", "menu_genero",
             "menu_emprendedor", "emprendedor_unidades", "emprendedor_costo_unitario",
             "emprendedor_costos_fijos", "emprendedor_utilidad_deseada", "emprendedor_precio_prueba",
@@ -3135,7 +3298,18 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "ni Vivienda). Lo puedes consultar en la app de tu Afore o en la app del SAR (CONSAR). Si "
                     "no lo sabes o vas a empezar desde cero, escribe 0. (ejemplo: 45000)"
                 )
-            if texto_limpio in ["2", "issste", "isste", "trabajadores que cotizan al issste"]:
+            if texto_limpio in ["2", "ley 73", "ley73", "trabajadores que cotizaban al imss antes de julio de 1997"]:
+                contexto["esperando"] = "ley73_salario_promedio"
+                return (
+                    "🌅 Vamos a estimar tu pensión con una versión simplificada de la metodología que usan "
+                    "las Afores para el régimen de Ley 73 (para quienes cotizaron al IMSS antes del 1 de "
+                    "julio de 1997).\n\n"
+                    "1️⃣ ¿Cuál es tu salario mensual promedio de las últimas 250 semanas (casi 5 años) que "
+                    "cotizaste? Lo puedes consultar en la app del IMSS Digital. Este dato no se guarda ni se "
+                    "comparte con nadie (ni con el SAT ni con nadie más): solo se usa aquí, en este momento, "
+                    "para hacer el cálculo. (ejemplo: 15000)"
+                )
+            if texto_limpio in ["3", "issste", "isste", "trabajadores que cotizan al issste"]:
                 contexto["esperando"] = "issste_saldo_actual"
                 return (
                     "🌅 Vamos a estimar tu saldo y tu pensión con una versión simplificada de la metodología "
@@ -3146,7 +3320,7 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "ni Vivienda). Lo puedes consultar en la app de tu Afore o en la app del SAR (CONSAR). Si "
                     "no lo sabes o vas a empezar desde cero, escribe 0. (ejemplo: 45000)"
                 )
-            if texto_limpio in ["3", "independientes", "trabajadores independientes"]:
+            if texto_limpio in ["4", "independientes", "trabajadores independientes"]:
                 contexto["esperando"] = "jubilacion_saldo_actual"
                 return (
                     "🌅 Vamos a estimar tu ahorro para el retiro con la metodología oficial de CONSAR para "
@@ -3156,9 +3330,9 @@ def _procesar_mensaje_interno(mensaje, numero):
                     "ni Vivienda). Lo puedes consultar en la app de tu Afore o en la app del SAR (CONSAR). Si "
                     "no lo sabes o vas a empezar desde cero, escribe 0. (ejemplo: 45000)"
                 )
-            if texto_limpio in ["4", "tutorial", "tutorial para el uso de las calculadoras"]:
+            if texto_limpio in ["5", "tutorial", "tutorial para el uso de las calculadoras"]:
                 return mensaje_jubilacion_tutorial
-            return "Por favor, elige una opción válida (1 a 4), o escribe *menú* para regresar al inicio."
+            return "Por favor, elige una opción válida (1 a 5), o escribe *menú* para regresar al inicio."
 
         # --- Submenú: Evalúa tu salud financiera ---
         if contexto["esperando"] == "menu_salud":
@@ -4745,7 +4919,9 @@ def _procesar_mensaje_interno(mensaje, numero):
             contexto["esperando"] = "imss_salario_mensual"
             return (
                 "5️⃣ ¿Cuál es tu salario mensual base de cotización? Es el sueldo con el que cotizas ante el "
-                "IMSS (lo puedes ver en tu recibo de nómina). (ejemplo: 12000)"
+                "IMSS (lo puedes ver en tu recibo de nómina). Este dato no se guarda ni se comparte con "
+                "nadie (ni con el SAT ni con nadie más): solo se usa aquí, en este momento, para hacer el "
+                "cálculo. (ejemplo: 12000)"
             )
 
         if contexto["esperando"] == "imss_salario_mensual":
@@ -4753,31 +4929,18 @@ def _procesar_mensaje_interno(mensaje, numero):
                 contexto["imss_salario_mensual"] = Decimal(mensaje.replace(",", "").replace("$", ""))
                 if contexto["imss_salario_mensual"] <= 0:
                     return "Por favor, indica un salario mensual mayor a 0 (ejemplo: 12000)."
-                contexto["esperando"] = "imss_rango_salarial"
-                opciones_rango = "\n".join(
-                    f"{k}️⃣ {IMSS_RANGOS_SALARIALES_TEXTO[k]}" for k in range(1, 9)
+                contexto["imss_rango_salarial"] = _imss_rango_salarial_desde_salario(
+                    contexto["imss_salario_mensual"]
                 )
+                contexto["esperando"] = "imss_rendimiento_anual"
                 return (
-                    "6️⃣ ¿En cuál de estos rangos salariales caes? Este dato determina el % que se aporta a "
-                    "tu cuenta por concepto de Retiro, Cesantía en edad avanzada y Vejez. Puedes verlo en tu "
-                    "recibo de nómina o preguntar en Recursos Humanos; si no puedes confirmarlo, elige el que "
-                    "más se acerque a tu sueldo:\n"
-                    f"{opciones_rango}"
+                    "6️⃣ ¿Qué rendimiento ANUAL real esperas obtener, antes de comisiones? La metodología oficial "
+                    "solo permite elegir entre estas dos opciones:\n"
+                    "1️⃣ 4%\n"
+                    "2️⃣ 5%"
                 )
             except:
                 return "Por favor, indica un número (ejemplo: 12000)."
-
-        if contexto["esperando"] == "imss_rango_salarial":
-            if texto_limpio not in [str(k) for k in range(1, 9)]:
-                return "Por favor, elige un número del 1 al 8 para tu rango salarial."
-            contexto["imss_rango_salarial"] = int(texto_limpio)
-            contexto["esperando"] = "imss_rendimiento_anual"
-            return (
-                "7️⃣ ¿Qué rendimiento ANUAL real esperas obtener, antes de comisiones? La metodología oficial "
-                "solo permite elegir entre estas dos opciones:\n"
-                "1️⃣ 4%\n"
-                "2️⃣ 5%"
-            )
 
         if contexto["esperando"] == "imss_rendimiento_anual":
             mapa_rendimiento = {"1": Decimal("4"), "4": Decimal("4"), "2": Decimal("5"), "5": Decimal("5")}
@@ -4786,7 +4949,7 @@ def _procesar_mensaje_interno(mensaje, numero):
             contexto["imss_rendimiento_anual"] = mapa_rendimiento[texto_limpio]
             contexto["esperando"] = "imss_aportacion_voluntaria_mensual"
             return (
-                "8️⃣ Además de tus aportaciones obligatorias, ¿te gustaría aportar algo cada mes de forma "
+                "7️⃣ Además de tus aportaciones obligatorias, ¿te gustaría aportar algo cada mes de forma "
                 "voluntaria? Si no, escribe 0. (ejemplo: 500)"
             )
 
@@ -4869,7 +5032,9 @@ def _procesar_mensaje_interno(mensaje, numero):
             contexto["esperando"] = "issste_sueldo_basico_mensual"
             return (
                 "5️⃣ ¿Cuál es tu sueldo básico mensual? Lo puedes ver en tu recibo de nómina o en tu estado "
-                "de cuenta de PENSIONISSSTE. (ejemplo: 15000)"
+                "de cuenta de PENSIONISSSTE. Este dato no se guarda ni se comparte con nadie (ni con el SAT "
+                "ni con nadie más): solo se usa aquí, en este momento, para hacer el cálculo. "
+                "(ejemplo: 15000)"
             )
 
         if contexto["esperando"] == "issste_sueldo_basico_mensual":
@@ -4935,6 +5100,55 @@ def _procesar_mensaje_interno(mensaje, numero):
                 mapa_rendimiento[texto_limpio],
             )
             return _con_feedback(numero, "jubilacion_issste", resultado)
+
+        # --- Jubilación: calculadora Ley 73 (IMSS, régimen anterior a 1997) ---
+        if contexto["esperando"] == "ley73_salario_promedio":
+            try:
+                contexto["ley73_salario_promedio"] = Decimal(mensaje.replace(",", "").replace("$", ""))
+                if contexto["ley73_salario_promedio"] <= 0:
+                    return "Por favor, indica un salario mensual mayor a 0 (ejemplo: 15000)."
+                contexto["esperando"] = "ley73_semanas_cotizadas"
+                return (
+                    "2️⃣ ¿Cuántas semanas has cotizado en total al IMSS? Se necesitan al menos 500 para "
+                    "tener derecho a esta pensión. Lo puedes consultar en la app del IMSS Digital. "
+                    "(ejemplo: 1200)"
+                )
+            except:
+                return "Por favor, indica un número (ejemplo: 15000)."
+
+        if contexto["esperando"] == "ley73_semanas_cotizadas":
+            try:
+                semanas = Decimal(mensaje.replace(",", ""))
+                if semanas < 0:
+                    return "Ese número no puede ser negativo 🙂 Indica tus semanas cotizadas (ejemplo: 1200)."
+                if semanas < 500:
+                    return (
+                        "Para este tipo de pensión se necesitan al menos 500 semanas cotizadas, y tú "
+                        f"indicaste {semanas}. Si crees que es un error, revisa tus semanas exactas en la "
+                        "app del IMSS Digital y vuelve a intentarlo, o escribe *menú* para salir."
+                    )
+                contexto["ley73_semanas_cotizadas"] = semanas
+                contexto["esperando"] = "ley73_edad_retiro"
+                return (
+                    "3️⃣ ¿A qué edad planeas retirarte? La Ley 73 solo permite pensionarte entre los 60 y "
+                    "los 65 años. Escribe un número de 60 a 65."
+                )
+            except:
+                return "Por favor, indica un número (ejemplo: 1200)."
+
+        if contexto["esperando"] == "ley73_edad_retiro":
+            try:
+                edad_retiro = int(Decimal(mensaje.replace(",", "")))
+                if edad_retiro not in LEY73_PORCENTAJE_PENSION_POR_EDAD:
+                    return "Por favor, indica una edad de retiro entre 60 y 65 años (ejemplo: 65)."
+                resultado = calcular_jubilacion_ley73(
+                    contexto["ley73_salario_promedio"],
+                    contexto["ley73_semanas_cotizadas"],
+                    edad_retiro,
+                )
+                return _con_feedback(numero, "jubilacion_ley73", resultado)
+            except:
+                return "Por favor, indica una edad de retiro entre 60 y 65 años (ejemplo: 65)."
 
 
         # FLUJO 2: abonos extra directos
