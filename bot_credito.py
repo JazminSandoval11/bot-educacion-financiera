@@ -1272,30 +1272,60 @@ def calcular_jubilacion_issste(
 # verificarla en https://www.inegi.org.mx/temas/uma/.
 UMA_DIARIA_VIGENTE = Decimal("117.31")
 
-# (k_min, k_max, %CBA, %incremento anual), tal cual la tabla oficial de
-# Profuturo. OJO: la tabla oficial que tenemos solo llega hasta k=5.50; no
-# cubre salarios promedio más altos que eso (algo que ya de por sí es poco
-# común entre quienes califican para Ley 73 hoy en día).
+# (k_min, k_max, %CBA, %incremento anual). Las primeras 19 filas (hasta
+# k=5.50) vienen de la tabla oficial de Profuturo. Jazmín encontró y envió
+# el 22/sep/2026 un documento adicional ("Tablas y procedimiento para
+# cálculo de pensión", que cita el art. 167 LSS 1973) con la tabla COMPLETA
+# del artículo 167, incluyendo 3 renglones que a Profuturo no le cabían:
+# de 5.51 a 5.75, de 5.76 a 6.00, y de 6.01 en adelante (sin tope numérico
+# publicado, por lo que aquí lo dejamos prácticamente sin límite superior).
+# Con esos 3 renglones ya no hay ningún salario que se quede sin cálculo.
+#
+# OJO con las unidades: ese documento describe la tabla "en veces el
+# salario mínimo general vigente", no en UMA. No es un error: es la
+# redacción ORIGINAL del artículo 167 (de antes de 2016, cuando la UMA no
+# existía). Con la desindexación del salario mínimo de 2016, este tipo de
+# referencias se convirtieron a UMA usando el valor que tenían salario
+# mínimo y UMA en ese momento (cuando ambos arrancaron iguales), y desde
+# entonces la UMA dejó de subir al mismo ritmo que el salario mínimo. Por
+# eso Profuturo (un documento más reciente) presenta los mismos 19
+# renglones pero ya etiquetados "en múltiplos de UMA": son la misma tabla,
+# solo que con la unidad correcta y actualizada. Aquí seguimos usando UMA
+# (variable k, definida abajo) para los 22 renglones, con toda confianza.
+#
+# Los porcentajes de los primeros 19 renglones coinciden entre ambos
+# documentos, CON UNA EXCEPCIÓN: para el renglón "de 1.26 a 1.50", Profuturo
+# dice 55.18% de cuantía básica y este nuevo documento dice 58.18%. Nos
+# quedamos con el 55.18% de Profuturo (un documento oficial de una Afore
+# regulada, para un producto real) por ser la fuente más confiable, y
+# porque el patrón de un solo dígito distinto (5 vs. 8) es consistente con
+# un error de transcripción en el otro documento; calculamx.com, que ya
+# habíamos descartado antes en esta misma sesión por informacion poco
+# confiable, tenía ese mismo 58.18% para ese renglón, lo que refuerza la
+# sospecha de que es un error que se fue copiando de una fuente a otra.
 LEY73_TABLA_CBA_INCREMENTO = [
-    (Decimal("0"), Decimal("1.00"), Decimal("80.00"), Decimal("0.56")),
-    (Decimal("1.01"), Decimal("1.25"), Decimal("77.11"), Decimal("0.81")),
-    (Decimal("1.26"), Decimal("1.50"), Decimal("55.18"), Decimal("1.18")),
-    (Decimal("1.51"), Decimal("1.75"), Decimal("49.23"), Decimal("1.43")),
-    (Decimal("1.76"), Decimal("2.00"), Decimal("42.67"), Decimal("1.62")),
-    (Decimal("2.01"), Decimal("2.25"), Decimal("37.65"), Decimal("1.76")),
-    (Decimal("2.26"), Decimal("2.50"), Decimal("33.68"), Decimal("1.87")),
-    (Decimal("2.51"), Decimal("2.75"), Decimal("30.48"), Decimal("1.96")),
-    (Decimal("2.76"), Decimal("3.00"), Decimal("27.83"), Decimal("2.03")),
-    (Decimal("3.01"), Decimal("3.25"), Decimal("25.60"), Decimal("2.10")),
-    (Decimal("3.26"), Decimal("3.50"), Decimal("23.70"), Decimal("2.15")),
-    (Decimal("3.51"), Decimal("3.75"), Decimal("22.07"), Decimal("2.20")),
-    (Decimal("3.76"), Decimal("4.00"), Decimal("20.65"), Decimal("2.24")),
-    (Decimal("4.01"), Decimal("4.25"), Decimal("19.39"), Decimal("2.27")),
-    (Decimal("4.26"), Decimal("4.50"), Decimal("18.29"), Decimal("2.30")),
-    (Decimal("4.51"), Decimal("4.75"), Decimal("17.30"), Decimal("2.33")),
-    (Decimal("4.76"), Decimal("5.00"), Decimal("16.41"), Decimal("2.36")),
-    (Decimal("5.01"), Decimal("5.25"), Decimal("15.61"), Decimal("2.38")),
-    (Decimal("5.26"), Decimal("5.50"), Decimal("14.88"), Decimal("2.40")),
+    (Decimal("0"), Decimal("1.00"), Decimal("80.00"), Decimal("0.563")),
+    (Decimal("1.01"), Decimal("1.25"), Decimal("77.11"), Decimal("0.814")),
+    (Decimal("1.26"), Decimal("1.50"), Decimal("55.18"), Decimal("1.178")),
+    (Decimal("1.51"), Decimal("1.75"), Decimal("49.23"), Decimal("1.430")),
+    (Decimal("1.76"), Decimal("2.00"), Decimal("42.67"), Decimal("1.615")),
+    (Decimal("2.01"), Decimal("2.25"), Decimal("37.65"), Decimal("1.756")),
+    (Decimal("2.26"), Decimal("2.50"), Decimal("33.68"), Decimal("1.868")),
+    (Decimal("2.51"), Decimal("2.75"), Decimal("30.48"), Decimal("1.958")),
+    (Decimal("2.76"), Decimal("3.00"), Decimal("27.83"), Decimal("2.033")),
+    (Decimal("3.01"), Decimal("3.25"), Decimal("25.60"), Decimal("2.096")),
+    (Decimal("3.26"), Decimal("3.50"), Decimal("23.70"), Decimal("2.149")),
+    (Decimal("3.51"), Decimal("3.75"), Decimal("22.07"), Decimal("2.195")),
+    (Decimal("3.76"), Decimal("4.00"), Decimal("20.65"), Decimal("2.235")),
+    (Decimal("4.01"), Decimal("4.25"), Decimal("19.39"), Decimal("2.271")),
+    (Decimal("4.26"), Decimal("4.50"), Decimal("18.29"), Decimal("2.302")),
+    (Decimal("4.51"), Decimal("4.75"), Decimal("17.30"), Decimal("2.330")),
+    (Decimal("4.76"), Decimal("5.00"), Decimal("16.41"), Decimal("2.355")),
+    (Decimal("5.01"), Decimal("5.25"), Decimal("15.61"), Decimal("2.377")),
+    (Decimal("5.26"), Decimal("5.50"), Decimal("14.88"), Decimal("2.398")),
+    (Decimal("5.51"), Decimal("5.75"), Decimal("14.22"), Decimal("2.416")),
+    (Decimal("5.76"), Decimal("6.00"), Decimal("13.62"), Decimal("2.433")),
+    (Decimal("6.01"), Decimal("999999"), Decimal("13.00"), Decimal("2.450")),
 ]
 
 LEY73_PORCENTAJE_PENSION_POR_EDAD = {
@@ -1327,11 +1357,9 @@ def calcular_jubilacion_ley73(salario_promedio_mensual, semanas_cotizadas, edad_
 
         if bracket is None:
             return (
-                f"Tu salario promedio corresponde a un nivel muy alto ({k:.2f} veces la UMA) que no está "
-                "cubierto por esta calculadora simplificada de Ley 73 (la tabla oficial que tenemos llega "
-                "hasta 5.50 veces la UMA). Para un cálculo exacto en tu caso, te recomendamos usar la "
-                "calculadora oficial de tu Afore o consultar directamente con el IMSS. Escribe *menú* para "
-                "volver al inicio."
+                f"Ese salario mensual parece un error de captura ({k:.2f} veces la UMA es un nivel "
+                "extremadamente alto). Revisa que lo hayas escrito bien (ejemplo: 15000, sin ceros de más) "
+                "y vuelve a intentarlo, o escribe *menú* para salir."
             )
 
         _, _, pct_cba, pct_incremento = bracket
